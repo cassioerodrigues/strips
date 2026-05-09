@@ -1,3 +1,3 @@
-from app.routers import auth, trees
+from app.routers import auth, parents, people, trees
 
-__all__ = ["auth", "trees"]
+__all__ = ["auth", "parents", "people", "trees"]

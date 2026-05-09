@@ -55,7 +55,7 @@ def _base_event(**kwargs) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class TestEventCreateXOR:
+class TestEventCreateRequiresPersonOrUnion:
     def test_rejects_when_both_ids_are_none(self):
         """Nenhum dos dois setado → ValidationError."""
         with pytest.raises(ValidationError) as exc_info:

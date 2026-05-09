@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Editores / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Variáveis de ambiente / segredos
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Supabase local
+backend/supabase/.temp/
+backend/supabase/.branches/
+backend/supabase/.env
+
+# Dumps e dados reais — apenas metadados (migrations) vão para o repo
+*.sql.gz
+*.dump
+backend/db/data/
+backend/db/backups/
+
+# Node (caso o frontend evolua para build system)
+node_modules/
+dist/
+build/
+.next/

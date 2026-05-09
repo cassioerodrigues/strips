@@ -1,0 +1,3 @@
+psycopg[binary]>=3.1
+# json5 é opcional (parser tem fallback puro-Python). Instale para parsing mais permissivo:
+# pip install json5

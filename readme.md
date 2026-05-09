@@ -32,7 +32,9 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 
 ## Como rodar o frontend (mockup)
 
-Abra `frontend/Stirps.html` direto no navegador, ou sirva a pasta com qualquer servidor estático:
+A versão atual da `main` está sempre disponível em **<http://cassiorodrigues.tech/strips/>** (servida estaticamente pelo nginx do servidor — ver `location /strips/` em `/etc/nginx/sites-available/cassiorodrigues.tech`).
+
+Para rodar localmente, abra `frontend/Stirps.html` direto no navegador ou sirva a pasta com qualquer servidor estático:
 
 ```bash
 cd frontend

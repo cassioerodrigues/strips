@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    app_env: str = "development"
     database_url: str = ""
     supabase_url: str = ""
     supabase_jwt_secret: str = ""

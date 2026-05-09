@@ -5,6 +5,7 @@ from app.auth import Claims
 from app.config import get_settings
 from app.db import lifespan
 from app.deps import get_current_user
+from app.errors import register_exception_handlers
 
 
 def create_app() -> FastAPI:
@@ -18,6 +19,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    register_exception_handlers(app)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

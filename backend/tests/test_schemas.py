@@ -33,6 +33,7 @@ from app.schemas import (
     UploadUrlRequest,
     UploadUrlResponse,
 )
+from app.schemas.auth import TreeMembershipOut
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +224,23 @@ class TestMediaSchemas:
             entity_id=PERSON_ID,
         )
         assert req.entity_type == "person"
+
+
+# ---------------------------------------------------------------------------
+# TreeMembershipOut — role deve usar Literal TreeRole
+# ---------------------------------------------------------------------------
+
+
+class TestTreeMembershipOut:
+    def test_rejects_invalid_role(self):
+        """role='invalid' deve levantar ValidationError."""
+        with pytest.raises(ValidationError):
+            TreeMembershipOut(tree=TreeOut(id=uuid.uuid4(), owner_id=uuid.uuid4(), name="T"), role="invalid")
+
+    def test_accepts_valid_role(self):
+        """role='owner' deve ser aceito sem erros."""
+        m = TreeMembershipOut(tree=TreeOut(id=uuid.uuid4(), owner_id=uuid.uuid4(), name="T"), role="owner")
+        assert m.role == "owner"
 
 
 # ---------------------------------------------------------------------------

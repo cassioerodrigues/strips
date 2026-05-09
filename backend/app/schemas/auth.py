@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.tree import TreeOut
+from app.schemas.tree import TreeOut, TreeRole
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ class TreeMembershipOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     tree: TreeOut
-    role: str  # 'owner' | 'editor' | 'viewer'
+    role: TreeRole
     joined_at: datetime | None = None
 
 

@@ -22,7 +22,7 @@ from app.schemas.relations import ParentLinkCreate, ParentLinkOut, RelationsResp
 
 # Whitelist de sort keys — nunca interpole input externo diretamente no SQL.
 _SORT_MAP: dict[str, str] = {
-    "name": "display_name",
+    "name": "COALESCE(display_name, last_name || ' ' || first_name) ASC NULLS LAST",
     "year": "birth_year NULLS LAST",
     "generation": "(external_ids->>'generation')::int NULLS LAST",
 }
@@ -280,8 +280,8 @@ def get_relations(conn: Connection, person_id: uuid.UUID) -> RelationsResponse:
         )
         parents = [PersonOut.model_validate(r) for r in cur.fetchall()]
 
-    # Query 2a: spouse — primeiro union ativo (status 'ongoing')
-    # V1: pegamos o primeiro casamento onde a pessoa é parceira.
+    # Query 2a: spouse — primeiro union (qualquer status), mais antigo primeiro.
+    # Replica frontend/components/profile.jsx:10-17 que não filtra por status.
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             f"""
@@ -292,8 +292,7 @@ def get_relations(conn: Connection, person_id: uuid.UUID) -> RelationsResponse:
                 ELSE u.partner_a_id
             END
             WHERE (u.partner_a_id = %s OR u.partner_b_id = %s)
-              AND u.status = 'ongoing'
-            ORDER BY u.start_year NULLS LAST
+            ORDER BY u.start_year ASC NULLS LAST, u.id ASC
             LIMIT 1
             """,
             (person_id, person_id, person_id),
@@ -379,9 +378,7 @@ def _make_media_out(row: dict) -> MediaOut:
     TODO(#8): substituir None por storage.create_signed_url(row["storage_path"])
     """
     out = MediaOut.model_validate(row)
-    # download_url não existe no schema atual de MediaOut; quando a Issue #8
-    # adicionar o campo, basta descomentar a linha abaixo.
-    # out = out.model_copy(update={"download_url": None})
+    out = out.model_copy(update={"download_url": None})
     return out
 
 

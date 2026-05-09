@@ -10,7 +10,7 @@ from psycopg import Connection
 from app.auth import Claims
 from app.deps import get_current_user, get_db_authenticated
 from app.schemas.event import EventOut
-from app.schemas.media import MediaOut
+from app.schemas.media import MediaLinkPayload, MediaOut
 from app.schemas.person import PersonCreate, PersonOut, PersonUpdate
 from app.schemas.relations import RelationsResponse
 from app.services.people import (
@@ -151,10 +151,11 @@ def get_person_media_endpoint(
 def link_media_endpoint(
     person_id: uuid.UUID,
     media_id: uuid.UUID,
-    is_primary: bool = Query(default=False),
+    payload: MediaLinkPayload | None = None,
     conn: Connection = Depends(get_db_authenticated),
 ) -> None:
-    """Vincula mídia à pessoa. Se is_primary=True, define como foto principal."""
+    """Vincula mídia à pessoa. Se is_primary=True no body, define como foto principal."""
+    is_primary = payload.is_primary if payload else False
     link_media(conn, person_id, media_id, is_primary)
 
 

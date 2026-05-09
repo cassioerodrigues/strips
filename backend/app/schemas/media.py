@@ -58,6 +58,7 @@ class MediaOut(BaseModel):
     taken_place: str | None = None
     uploaded_by: uuid.UUID | None = None
     uploaded_at: datetime | None = None
+    download_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -76,3 +77,12 @@ class UploadUrlResponse(BaseModel):
     url: str
     storage_path: str
     expires_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# MediaLinkPayload — body para POST /api/people/{id}/media/{media_id}
+# ---------------------------------------------------------------------------
+
+
+class MediaLinkPayload(BaseModel):
+    is_primary: bool = False

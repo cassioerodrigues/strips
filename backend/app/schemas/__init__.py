@@ -9,6 +9,7 @@ from app.schemas.event import EventCreate, EventOut, EventType
 from app.schemas.media import (
     MediaCreate,
     MediaKind,
+    MediaLinkPayload,
     MediaOut,
     UploadUrlRequest,
     UploadUrlResponse,
@@ -52,6 +53,7 @@ __all__ = [
     "MediaCreate",
     "MediaOut",
     "MediaKind",
+    "MediaLinkPayload",
     "UploadUrlRequest",
     "UploadUrlResponse",
     # relations

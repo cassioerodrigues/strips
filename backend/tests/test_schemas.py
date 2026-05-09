@@ -18,8 +18,10 @@ from app.schemas import (
     EventCreate,
     EventOut,
     MediaCreate,
+    MediaLinkPayload,
     MediaOut,
     MeResponse,
+    ParentLinkCreate,
     PersonCreate,
     PersonOut,
     PersonUpdate,
@@ -225,6 +227,37 @@ class TestMediaSchemas:
         )
         assert req.entity_type == "person"
 
+    def test_media_out_download_url_defaults_to_none(self):
+        """MediaOut.download_url é None por default (Issue #6 Fix 2)."""
+        m = MediaOut(
+            id=uuid.uuid4(),
+            tree_id=TREE_ID,
+            kind="photo",
+            storage_path="tree/x/y.jpg",
+        )
+        assert m.download_url is None
+
+    def test_media_out_download_url_accepts_string(self):
+        """MediaOut.download_url aceita string quando setada."""
+        m = MediaOut(
+            id=uuid.uuid4(),
+            tree_id=TREE_ID,
+            kind="photo",
+            storage_path="tree/x/y.jpg",
+            download_url="https://example.com/signed/y.jpg",
+        )
+        assert m.download_url == "https://example.com/signed/y.jpg"
+
+    def test_media_link_payload_defaults_is_primary_false(self):
+        """MediaLinkPayload sem campos → is_primary=False (body opcional)."""
+        p = MediaLinkPayload()
+        assert p.is_primary is False
+
+    def test_media_link_payload_accepts_true(self):
+        """MediaLinkPayload com is_primary=True é aceito."""
+        p = MediaLinkPayload(is_primary=True)
+        assert p.is_primary is True
+
 
 # ---------------------------------------------------------------------------
 # TreeMembershipOut — role deve usar Literal TreeRole
@@ -241,6 +274,26 @@ class TestTreeMembershipOut:
         """role='owner' deve ser aceito sem erros."""
         m = TreeMembershipOut(tree=TreeOut(id=uuid.uuid4(), owner_id=uuid.uuid4(), name="T"), role="owner")
         assert m.role == "owner"
+
+
+# ---------------------------------------------------------------------------
+# ParentLinkCreate — child_id removido do body (vem do path param)
+# ---------------------------------------------------------------------------
+
+
+class TestParentLinkCreate:
+    def test_parent_link_create_no_child_id(self):
+        """ParentLinkCreate não tem child_id — vem do path param (Fix 4)."""
+        link = ParentLinkCreate(parent_id=uuid.uuid4())
+        assert link.kind == "biological"
+        assert link.notes is None
+        assert not hasattr(link, "child_id")
+
+    def test_parent_link_create_with_kind(self):
+        """ParentLinkCreate aceita kind alternativo."""
+        link = ParentLinkCreate(parent_id=uuid.uuid4(), kind="adoptive", notes="adotado em 1990")
+        assert link.kind == "adoptive"
+        assert link.notes == "adotado em 1990"
 
 
 # ---------------------------------------------------------------------------

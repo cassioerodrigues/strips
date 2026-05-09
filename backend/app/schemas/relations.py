@@ -26,7 +26,6 @@ ParentKind = Literal["biological", "adoptive", "step", "foster", "legal", "unkno
 
 
 class ParentLinkCreate(BaseModel):
-    child_id: uuid.UUID
     parent_id: uuid.UUID
     kind: ParentKind = "biological"
     notes: str | None = None

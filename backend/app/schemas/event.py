@@ -82,6 +82,22 @@ class EventCreate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Update (PATCH parcial — todos os campos opcionais)
+# ---------------------------------------------------------------------------
+
+
+class EventUpdate(BaseModel):
+    type: EventType | None = None
+    custom_label: str | None = None
+
+    year: int | None = None
+    month: int | None = None
+    day: int | None = None
+    place: str | None = None
+    description: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Out (leitura do banco)
 # ---------------------------------------------------------------------------
 

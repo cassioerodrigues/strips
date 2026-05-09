@@ -1,11 +1,10 @@
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import Claims
 from app.config import get_settings
 from app.db import lifespan
-from app.deps import get_current_user
 from app.errors import register_exception_handlers
+from app.routers import auth, trees
 
 
 def create_app() -> FastAPI:
@@ -26,9 +25,8 @@ def create_app() -> FastAPI:
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/_whoami")
-    def whoami(user: Claims = Depends(get_current_user)) -> dict:
-        return {"sub": str(user.sub), "email": user.email, "role": user.role}
+    app.include_router(auth.router)
+    app.include_router(trees.router)
 
     return app
 

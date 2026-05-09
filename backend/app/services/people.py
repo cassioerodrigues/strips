@@ -42,20 +42,21 @@ def list_people(
     offset: int,
 ) -> list[PersonOut]:
     """Lista paginada de pessoas numa árvore com filtros e ordenação."""
-    order_expr = _SORT_MAP.get(sort, "display_name")
+    order_expr = _SORT_MAP[sort]
 
     params: list[Any] = [tree_id]
     where_extra = ""
     if search:
         where_extra = (
             " AND ("
-            "  display_name ILIKE %s"
-            "  OR first_name ILIKE %s"
-            "  OR last_name  ILIKE %s"
-            "  OR maiden_name ILIKE %s"
+            r"  display_name ILIKE %s ESCAPE '\\'"
+            r"  OR first_name ILIKE %s ESCAPE '\\'"
+            r"  OR last_name  ILIKE %s ESCAPE '\\'"
+            r"  OR maiden_name ILIKE %s ESCAPE '\\'"
             ")"
         )
-        term = f"%{search}%"
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        term = f"%{escaped}%"
         params.extend([term, term, term, term])
 
     # Safe: order_expr vem exclusivamente da whitelist _SORT_MAP acima.
@@ -145,12 +146,13 @@ def create_person(
                 payload.photo_media_id,
                 payload.family_search_id,
                 payload.gedcom_id,
-                payload.model_dump()["external_ids"],
+                payload.external_ids,
                 user_sub,
             ),
         )
         row = cur.fetchone()
-        assert row is not None
+        if row is None:  # pragma: no cover
+            raise RuntimeError("INSERT INTO persons RETURNING returned no row")
     return PersonOut.model_validate(row)
 
 
@@ -247,10 +249,13 @@ def get_relations(conn: Connection, person_id: uuid.UUID) -> RelationsResponse:
     """Deriva relações de uma pessoa (pais, cônjuge, irmãos, filhos).
 
     Replica a lógica de frontend/components/profile.jsx:10-17.
-    3 queries no banco:
+    4 queries de dados + 1 de validação = 5 round-trips no banco:
+      0. validação — get_person para garantir existência e aplicar RLS
       1. parents — via person_parents JOIN persons
-      2. spouse — via unions; siblings — shared parents excluindo :id
-      3. children — reverse person_parents
+      2. spouse — via unions (primeiro union, mais antigo)
+      3. siblings — shared parents excluindo :id
+      4. children — reverse person_parents
+    TODO: consolidar em CTE única para reduzir round-trips (#tech-debt).
     """
     # Garantir que a pessoa existe (404 se RLS bloquear ou não existir).
     get_person(conn, person_id)
@@ -415,6 +420,11 @@ def link_media(
     get_person(conn, person_id)
 
     with conn.cursor() as cur:
+        if is_primary:
+            cur.execute(
+                "UPDATE person_media SET is_primary = FALSE WHERE person_id = %s AND media_id <> %s",
+                (person_id, media_id),
+            )
         cur.execute(
             """
             INSERT INTO person_media(person_id, media_id, is_primary)
@@ -445,3 +455,7 @@ def unlink_media(
         )
         if cur.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Media link not found")
+        cur.execute(
+            "UPDATE persons SET photo_media_id = NULL WHERE id = %s AND photo_media_id = %s",
+            (person_id, media_id),
+        )

@@ -23,8 +23,6 @@ Sex = Literal["M", "F", "O", "U"]
 
 
 class PersonCreate(BaseModel):
-    tree_id: uuid.UUID
-
     # nome
     first_name: str | None = None
     middle_names: str | None = None

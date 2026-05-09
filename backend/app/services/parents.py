@@ -33,7 +33,8 @@ def add_parent(
             (child_id, payload.parent_id, payload.kind, payload.notes),
         )
         row = cur.fetchone()
-        assert row is not None
+        if row is None:  # pragma: no cover
+            raise RuntimeError("INSERT INTO person_parents RETURNING returned no row")
     return ParentLinkOut.model_validate(row)
 
 

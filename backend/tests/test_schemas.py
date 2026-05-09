@@ -121,7 +121,7 @@ class TestTreeSchemas:
 
 class TestPersonSchemas:
     def test_person_create_minimal(self):
-        p = PersonCreate(tree_id=TREE_ID)
+        p = PersonCreate()
         assert p.sex == "U"
         assert p.is_living is True
         assert p.tags == []
@@ -129,7 +129,6 @@ class TestPersonSchemas:
 
     def test_person_create_full(self):
         p = PersonCreate(
-            tree_id=TREE_ID,
             first_name="João",
             last_name="Silva",
             sex="M",
@@ -152,7 +151,7 @@ class TestPersonSchemas:
     def test_person_out_sex_literal(self):
         """Sex só aceita os valores do enum."""
         with pytest.raises(ValidationError):
-            PersonCreate(tree_id=TREE_ID, sex="X")  # type: ignore[arg-type]
+            PersonCreate(sex="X")  # type: ignore[arg-type]
 
     def test_person_out_from_dict(self):
         data = {

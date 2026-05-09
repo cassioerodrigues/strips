@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""
     supabase_storage_bucket: str = "stirps-media"
-    cors_origins: list[str] = ["http://localhost:8000"]
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:8000"]
 
     @field_validator("cors_origins", mode="before")
     @classmethod

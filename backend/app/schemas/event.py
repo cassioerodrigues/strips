@@ -60,7 +60,6 @@ EventType = Literal[
 
 
 class EventCreate(BaseModel):
-    tree_id: uuid.UUID
     person_id: uuid.UUID | None = None
     union_id: uuid.UUID | None = None
 

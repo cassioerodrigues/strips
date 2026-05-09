@@ -47,6 +47,7 @@ def list_events(
         where.append("year <= %s")
         params.append(to_year)
     if event_type is not None:
+        # Cast explícito: psycopg3 não converte str → event_type_t automaticamente.
         where.append("type = %s::event_type_t")
         params.append(event_type)
     if person_id is not None:

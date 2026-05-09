@@ -25,7 +25,6 @@ UnionStatus = Literal["ongoing", "divorced", "widowed", "annulled", "separated",
 
 
 class UnionCreate(BaseModel):
-    tree_id: uuid.UUID
     partner_a_id: uuid.UUID
     partner_b_id: uuid.UUID
 

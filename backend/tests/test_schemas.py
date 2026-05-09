@@ -49,7 +49,7 @@ TREE_ID = uuid.uuid4()
 
 def _base_event(**kwargs) -> dict:
     """Campos mínimos para um EventCreate válido."""
-    return {"tree_id": TREE_ID, "type": "baptism", **kwargs}
+    return {"type": "baptism", **kwargs}
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +175,7 @@ class TestUnionSchemas:
     def test_union_create_minimal(self):
         a_id = uuid.uuid4()
         b_id = uuid.uuid4()
-        u = UnionCreate(tree_id=TREE_ID, partner_a_id=a_id, partner_b_id=b_id)
+        u = UnionCreate(partner_a_id=a_id, partner_b_id=b_id)
         assert u.type == "marriage"
         assert u.status == "ongoing"
 
@@ -187,7 +187,6 @@ class TestUnionSchemas:
     def test_union_type_literal(self):
         with pytest.raises(ValidationError):
             UnionCreate(
-                tree_id=TREE_ID,
                 partner_a_id=uuid.uuid4(),
                 partner_b_id=uuid.uuid4(),
                 type="invalid_type",  # type: ignore[arg-type]

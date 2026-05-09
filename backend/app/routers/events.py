@@ -23,13 +23,13 @@ def list_events_endpoint(
     tree_id: uuid.UUID,
     from_year: int | None = Query(default=None, description="Filtrar eventos a partir deste ano (inclusive)"),
     to_year: int | None = Query(default=None, description="Filtrar eventos até este ano (inclusive)"),
-    type: EventType | None = Query(default=None, alias="type", description="Filtrar por tipo de evento"),
+    event_type: EventType | None = Query(default=None, alias="type", description="Filtrar por tipo de evento"),
     person_id: uuid.UUID | None = Query(default=None, description="Filtrar por pessoa"),
     union_id: uuid.UUID | None = Query(default=None, description="Filtrar por união"),
     conn: Connection = Depends(get_db_authenticated),
 ) -> list[EventOut]:
     """Lista eventos de uma árvore com filtros opcionais, ordenados por year ASC."""
-    return list_events(conn, tree_id, from_year, to_year, type, person_id, union_id)
+    return list_events(conn, tree_id, from_year, to_year, event_type, person_id, union_id)
 
 
 @router.post(

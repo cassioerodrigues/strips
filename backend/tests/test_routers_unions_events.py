@@ -187,27 +187,6 @@ class TestPayloadValidation:
             r = await c.post(f"/api/trees/{TREE_ID}/events", json=payload)
         assert r.status_code == 422
 
-    async def test_create_event_with_person_id_is_accepted_structurally(self, authed_app):
-        """POST /events com person_id → passa validação Pydantic.
-
-        Sem banco real, o serviço lança AttributeError sobre conn=None.
-        O importante é que o status_code NÃO seja 422 (validação passou).
-        O middleware de erro retorna 500 neste ambiente de teste sem DB.
-        """
-        payload = {
-            "tree_id": str(TREE_ID),
-            "type": "baptism",
-            "person_id": str(PERSON_A),
-        }
-        try:
-            async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
-                r = await c.post(f"/api/trees/{TREE_ID}/events", json=payload)
-            # Se chegou aqui: validação Pydantic passou (não retornou 422).
-            assert r.status_code != 422
-        except Exception:
-            # AttributeError por conn=None propagou além do middleware — validação já passou.
-            pass
-
     async def test_create_union_missing_required_fields_returns_422(self, authed_app):
         """POST /unions sem partner_a_id/partner_b_id → 422."""
         payload = {"type": "marriage"}

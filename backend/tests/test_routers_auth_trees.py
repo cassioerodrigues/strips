@@ -14,7 +14,6 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
@@ -138,6 +137,50 @@ class TestUnauthorizedReturns401:
         ) as client:
             resp = await client.delete(f"/api/trees/{TREE_ID}")
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# 2b. Validação de payload / path params (FastAPI 422 antes de tocar service)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def authed_app(app):
+    """App com auth bypass — para testar validação de payload/path sem JWT real."""
+    from app.deps import get_current_user, get_db_authenticated
+    from app.auth import Claims
+
+    fake_user = Claims(sub=USER_ID, email="t@t", role="authenticated")
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    # get_db_authenticated não pode ser executado de fato (não há pool); o teste
+    # só precisa que a validação de payload/path rode antes do service.
+    app.dependency_overrides[get_db_authenticated] = lambda: None
+    yield app
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.anyio
+class TestPayloadValidation:
+    async def test_create_tree_empty_body_is_422(self, authed_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=authed_app), base_url="http://test"
+        ) as client:
+            resp = await client.post("/api/trees", json={})
+        assert resp.status_code == 422
+
+    async def test_get_tree_with_invalid_uuid_is_422(self, authed_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=authed_app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/trees/nao-e-uuid")
+        assert resp.status_code == 422
+
+    async def test_patch_tree_with_invalid_uuid_is_422(self, authed_app):
+        async with AsyncClient(
+            transport=ASGITransport(app=authed_app), base_url="http://test"
+        ) as client:
+            resp = await client.patch("/api/trees/nao-e-uuid", json={"name": "x"})
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

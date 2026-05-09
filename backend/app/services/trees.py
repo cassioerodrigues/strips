@@ -157,6 +157,7 @@ def update_tree(
         # Nada a atualizar — retorna estado atual
         return get_tree(conn, tree_id)
 
+    # Safe: keys vêm da whitelist `allowed` acima — nunca interpole input externo aqui.
     set_clauses = [f"{k} = %s" for k in valid_fields]
     sql = (
         f"UPDATE trees SET {', '.join(set_clauses)}, updated_at = now() "

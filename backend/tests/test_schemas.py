@@ -237,6 +237,67 @@ class TestMediaSchemas:
                 storage_path=f"tree_{TREE_ID}/hacker/{PERSON_ID}/x.jpg",
             )
 
+    def test_media_create_storage_path_traversal_to_other_tree(self):
+        """storage_path com `..` que escapa para outra tree -> ValidationError.
+
+        Sem regex estrita, `tree_<A>/person/../../tree_<B>/...` passaria pelo
+        startswith + partition antigo e o gateway Supabase (que usa
+        SERVICE_ROLE) resolveria para tree_<B> — bypass cross-tenant.
+        """
+        tree_a = uuid.uuid4()
+        tree_b = uuid.uuid4()
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=tree_a,
+                kind="photo",
+                storage_path=f"tree_{tree_a}/person/../../tree_{tree_b}/person/{PERSON_ID}/secret.jpg",
+            )
+
+    def test_media_create_storage_path_traversal_outside_bucket(self):
+        """storage_path com `..` no filename escapando o bucket -> ValidationError."""
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/../../../etc/passwd",
+            )
+
+    def test_media_create_storage_path_filename_is_dotdot(self):
+        """storage_path com filename `..` -> ValidationError."""
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/..",
+            )
+
+    def test_media_create_storage_path_filename_is_dot(self):
+        """storage_path com filename `.` -> ValidationError."""
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/.",
+            )
+
+    def test_media_create_storage_path_entity_id_not_uuid(self):
+        """entity_id segment deve ser UUID -> ValidationError."""
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{TREE_ID}/person/not-a-uuid/file.jpg",
+            )
+
+    def test_media_create_storage_path_valid(self):
+        """storage_path bem formado passa pelo validator."""
+        m = MediaCreate(
+            tree_id=TREE_ID,
+            kind="photo",
+            storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/file.jpg",
+        )
+        assert m.kind == "photo"
+
     def test_upload_url_request_invalid_entity_type(self):
         """entity_type fora do Literal -> ValidationError (antes de tocar DB)."""
         with pytest.raises(ValidationError):

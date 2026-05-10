@@ -100,7 +100,7 @@ def build_storage_path(
     """
     if entity_type not in _ALLOWED_ENTITY_TYPES:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             f"entity_type inválido: {entity_type!r}. Esperado um de "
             f"{sorted(_ALLOWED_ENTITY_TYPES)}.",
         )

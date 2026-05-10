@@ -192,3 +192,67 @@ class TestPayloadValidation:
         async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
             r = await c.post(f"/api/trees/{TREE_ID}/media", json=body)
         assert r.status_code == 422
+
+    async def test_create_media_storage_path_cross_tenant(self, authed_app):
+        """storage_path apontando para outra tree -> 422 (cross-tenant)."""
+        other_tree = uuid.uuid4()
+        body = {
+            "tree_id": str(TREE_ID),
+            "kind": "photo",
+            # storage_path aponta para tree_<other_tree>, nao a do body.
+            "storage_path": f"tree_{other_tree}/person/{ENTITY_ID}/abc-target.jpg",
+        }
+        async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
+            r = await c.post(f"/api/trees/{TREE_ID}/media", json=body)
+        assert r.status_code == 422
+        # Defensivo: mensagem deve mencionar storage_path/tree_id
+        assert "storage_path" in r.text
+
+    async def test_create_media_storage_path_malformed_no_prefix(self, authed_app):
+        """storage_path sem prefixo tree_ -> 422."""
+        body = {
+            "tree_id": str(TREE_ID),
+            "kind": "photo",
+            "storage_path": f"person/{ENTITY_ID}/abc-foto.jpg",  # falta tree_<id>/
+        }
+        async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
+            r = await c.post(f"/api/trees/{TREE_ID}/media", json=body)
+        assert r.status_code == 422
+
+    async def test_create_media_storage_path_invalid_entity_type(self, authed_app):
+        """storage_path com entity_type fora da whitelist -> 422 (defesa em profundidade)."""
+        body = {
+            "tree_id": str(TREE_ID),
+            "kind": "photo",
+            # 'hacker' nao e um EntityType valido (person/union/event/tree).
+            "storage_path": f"tree_{TREE_ID}/hacker/{ENTITY_ID}/abc-x.jpg",
+        }
+        async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
+            r = await c.post(f"/api/trees/{TREE_ID}/media", json=body)
+        assert r.status_code == 422
+
+    async def test_create_media_tree_id_body_diverges_from_path(self, authed_app):
+        """tree_id no body diverge do path -> 422 (router check)."""
+        other_tree = uuid.uuid4()
+        # storage_path consistente com other_tree para nao bater no validator
+        # de schema antes — assim testamos especificamente o check do router.
+        body = {
+            "tree_id": str(other_tree),
+            "kind": "photo",
+            "storage_path": f"tree_{other_tree}/person/{ENTITY_ID}/abc-foto.jpg",
+        }
+        async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
+            r = await c.post(f"/api/trees/{TREE_ID}/media", json=body)
+        assert r.status_code == 422
+
+    async def test_upload_url_invalid_entity_type(self, authed_app):
+        """entity_type fora do Literal -> 422 antes de tocar o banco."""
+        body = {
+            "filename": "f.jpg",
+            "mime_type": "image/jpeg",
+            "entity_type": "hacker",  # nao esta em person/union/event/tree
+            "entity_id": str(ENTITY_ID),
+        }
+        async with AsyncClient(transport=ASGITransport(app=authed_app), base_url="http://test") as c:
+            r = await c.post(f"/api/trees/{TREE_ID}/media/upload-url", json=body)
+        assert r.status_code == 422

@@ -99,10 +99,8 @@ def build_storage_path(
     Levanta HTTPException(422) se entity_type não estiver na whitelist.
     """
     if entity_type not in _ALLOWED_ENTITY_TYPES:
-        # Usar 422 numérico — o nome HTTP_422_UNPROCESSABLE_ENTITY foi
-        # depreciado em Starlette em favor de HTTP_422_UNPROCESSABLE_CONTENT.
         raise HTTPException(
-            422,
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"entity_type inválido: {entity_type!r}. Esperado um de "
             f"{sorted(_ALLOWED_ENTITY_TYPES)}.",
         )

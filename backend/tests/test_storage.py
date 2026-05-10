@@ -65,6 +65,9 @@ class TestSafeFilename:
         # `..` virou `_`, `/` virou `_`
         assert ".." not in out
         assert "/" not in out
+        # Assert deterministico: cada `..` e cada `/` viram `_`,
+        # producao final esperada e "____etc_passwd".
+        assert out == "____etc_passwd"
 
     def test_strips_backslash(self):
         out = safe_filename(r"foo\bar.jpg")

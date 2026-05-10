@@ -378,9 +378,12 @@ def get_person_events(conn: Connection, person_id: uuid.UUID) -> list[EventOut]:
 def _make_media_out(row: dict) -> MediaOut:
     """Converte row do banco em MediaOut.
 
-    download_url é sempre None nesta versão — a Issue #8 implementa
-    app/storage.py com a geração de signed URLs do Supabase Storage.
-    TODO(#8): substituir None por storage.create_signed_url(row["storage_path"])
+    download_url e sempre None nas listagens de mídia (get_person_media etc.).
+    Para obter a signed URL, o cliente deve chamar o endpoint dedicado
+    `GET /api/media/{id}/download-url` (implementado em app/routers/media.py).
+    Integrar a signed URL diretamente no MediaOut listado e deliberadamente
+    pendente (Issue futura) — geraria N chamadas ao Supabase Storage por
+    listagem, com TTL curto, o que nao escala bem.
     """
     out = MediaOut.model_validate(row)
     out = out.model_copy(update={"download_url": None})

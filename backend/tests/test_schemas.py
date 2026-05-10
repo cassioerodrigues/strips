@@ -203,7 +203,9 @@ class TestMediaSchemas:
         m = MediaCreate(
             tree_id=TREE_ID,
             kind="photo",
-            storage_path="tree_abc/persons/xyz/foto.jpg",
+            # storage_path deve comecar com `tree_<tree_id>/<entity_type>/...`
+            # — validado pelo model_validator de MediaCreate.
+            storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/abc-foto.jpg",
         )
         assert m.kind == "photo"
         assert m.mime_type is None
@@ -213,7 +215,36 @@ class TestMediaSchemas:
             MediaCreate(
                 tree_id=TREE_ID,
                 kind="gif",  # type: ignore[arg-type]
-                storage_path="x/y.gif",
+                storage_path=f"tree_{TREE_ID}/person/{PERSON_ID}/x.gif",
+            )
+
+    def test_media_create_storage_path_must_match_tree_id(self):
+        """storage_path com prefixo de outra tree -> ValidationError."""
+        other_tree = uuid.uuid4()
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{other_tree}/person/{PERSON_ID}/x.jpg",
+            )
+
+    def test_media_create_storage_path_invalid_entity_type(self):
+        """storage_path com entity_type fora da whitelist -> ValidationError."""
+        with pytest.raises(ValidationError):
+            MediaCreate(
+                tree_id=TREE_ID,
+                kind="photo",
+                storage_path=f"tree_{TREE_ID}/hacker/{PERSON_ID}/x.jpg",
+            )
+
+    def test_upload_url_request_invalid_entity_type(self):
+        """entity_type fora do Literal -> ValidationError (antes de tocar DB)."""
+        with pytest.raises(ValidationError):
+            UploadUrlRequest(
+                filename="f.jpg",
+                mime_type="image/jpeg",
+                entity_type="hacker",  # type: ignore[arg-type]
+                entity_id=PERSON_ID,
             )
 
     def test_upload_url_request(self):

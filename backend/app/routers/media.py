@@ -76,9 +76,9 @@ def create_media_endpoint(
     conn: Connection = Depends(get_db_authenticated),
 ) -> MediaOut:
     """Registra metadata em `media`. RLS bloqueia viewers via policy media_write."""
-    # tree_id do path é a fonte de verdade — sobrescreve qualquer valor no body
-    # para evitar inconsistências (cliente que mande tree_id divergente leva 422?
-    # — Optamos por silenciosamente alinhar ao path, mais permissivo e idiomático).
+    # tree_id do path e a fonte de verdade; divergencia no body e erro do
+    # cliente, retorna 422. (storage_path tambem e validado contra tree_id
+    # no schema MediaCreate — defesa em profundidade contra cross-tenant.)
     if payload.tree_id != tree_id:
         raise HTTPException(422, "tree_id no body diverge do path")
     return create_media(conn, user.sub, payload)

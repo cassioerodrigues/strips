@@ -92,20 +92,17 @@ async def test_cross_tree_write_blocked(client, seeded_tree):
 
 
 @pytest.mark.anyio
-async def test_viewer_can_read_but_not_write(client, seeded_tree, make_user, db_pool):
+async def test_viewer_can_read_but_not_write(client, seeded_tree, make_user):
     """Promove Carol a viewer de tree_a; GETs funcionam, mutações → 403."""
     tree_a = seeded_tree["tree_a"]
     person_a = seeded_tree["person_a"]
-    carol_id, carol_token = make_user(display_name="Carol Viewer", email_prefix="carol")
-
-    # Adiciona Carol como viewer (bypass do RLS aqui — setup com pool service-role)
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO tree_members (tree_id, user_id, role) VALUES (%s, %s, 'viewer')",
-                (tree_a, carol_id),
-            )
-        conn.commit()
+    # make_user(role=...) já insere em tree_members na mesma chamada.
+    carol_id, carol_token = make_user(
+        display_name="Carol Viewer",
+        email_prefix="carol",
+        role="viewer",
+        tree_id=tree_a,
+    )
 
     async with client(token=carol_token) as c:
         # READ: ok
@@ -141,7 +138,7 @@ async def test_viewer_can_read_but_not_write(client, seeded_tree, make_user, db_
 
 @pytest.mark.anyio
 async def test_editor_can_write_persons_but_not_membership(
-    client, seeded_tree, make_user, db_pool, rls_conn
+    client, seeded_tree, make_user, rls_conn
 ):
     """Editor adiciona pessoa OK; tentativa de INSERT em tree_members falha.
 
@@ -151,15 +148,12 @@ async def test_editor_can_write_persons_but_not_membership(
     from psycopg import errors as pg_errors
 
     tree_a = seeded_tree["tree_a"]
-    dave_id, dave_token = make_user(display_name="Dave Editor", email_prefix="dave")
-
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO tree_members (tree_id, user_id, role) VALUES (%s, %s, 'editor')",
-                (tree_a, dave_id),
-            )
-        conn.commit()
+    dave_id, dave_token = make_user(
+        display_name="Dave Editor",
+        email_prefix="dave",
+        role="editor",
+        tree_id=tree_a,
+    )
 
     # 4a. Editor consegue criar pessoa via API.
     async with client(token=dave_token) as c:
@@ -277,3 +271,43 @@ async def test_cascade_on_person_delete(client, seeded_tree, db_pool):
                 (child["id"], child["id"]),
             )
             assert cur.fetchone() is None, "person_parents não foi removido em cascade"
+
+
+@pytest.mark.anyio
+async def test_delete_person_cascades_to_unions(client, seeded_tree, db_pool):
+    """DELETE em person derruba também a `unions` em que ele participa.
+
+    Cenário irmão do anterior — a spec aceite exige cascade em events/parents
+    /unions, então cobrimos union explicitamente.
+    """
+    token_a = seeded_tree["token_a"]
+    tree_a = seeded_tree["tree_a"]
+
+    async with client(token=token_a) as c:
+        p = (await c.post(f"/api/trees/{tree_a}/people", json={"first_name": "P"})).json()
+        p2 = (await c.post(f"/api/trees/{tree_a}/people", json={"first_name": "P2"})).json()
+
+        # `unions` exige partner_a_id < partner_b_id (canonical order).
+        # O endpoint aceita qualquer ordem e normaliza internamente; passamos
+        # os UUIDs como vieram — o endpoint cuida do swap.
+        r = await c.post(
+            f"/api/trees/{tree_a}/unions",
+            json={
+                "partner_a_id": p["id"],
+                "partner_b_id": p2["id"],
+                "type": "marriage",
+                "status": "ongoing",
+            },
+        )
+        assert r.status_code == 201, r.text
+        union_id = r.json()["id"]
+
+        # DELETE P → union deve cascatear.
+        r = await c.delete(f"/api/people/{p['id']}")
+        assert r.status_code == 204, r.text
+
+    with db_pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM unions WHERE id = %s", (union_id,))
+            row = cur.fetchone()
+            assert row is not None and row[0] == 0, "union não foi removida em cascade"

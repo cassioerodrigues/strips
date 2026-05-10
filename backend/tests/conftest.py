@@ -109,7 +109,22 @@ def make_user(db_pool) -> Iterator[MakeUserFn]:
     """
     created: list[uuid.UUID] = []
 
-    def _make(display_name: str = "Test User", email_prefix: str = "user") -> tuple[uuid.UUID, str]:
+    def _make(
+        display_name: str = "Test User",
+        email_prefix: str = "user",
+        role: str | None = None,
+        tree_id: uuid.UUID | None = None,
+    ) -> tuple[uuid.UUID, str]:
+        """Cria auth.users + profiles e devolve (uid, jwt).
+
+        Quando ``role`` é informado, também insere a linha correspondente em
+        ``tree_members`` — exige ``tree_id`` (a árvore precisa existir antes
+        da chamada). Sem ``role``, mantém o comportamento original (sem
+        membership), útil para cenários em que a árvore ainda nem existe.
+        """
+        if role is not None and tree_id is None:
+            raise ValueError("make_user(role=...) requires tree_id")
+
         uid = uuid.uuid4()
         email = f"{email_prefix}-{uid.hex[:8]}@test.local"
         with db_pool.connection() as conn:
@@ -126,6 +141,11 @@ def make_user(db_pool) -> Iterator[MakeUserFn]:
                     "INSERT INTO profiles (id, display_name) VALUES (%s, %s)",
                     (uid, display_name),
                 )
+                if role is not None:
+                    cur.execute(
+                        "INSERT INTO tree_members (tree_id, user_id, role) VALUES (%s, %s, %s)",
+                        (tree_id, uid, role),
+                    )
             conn.commit()
 
         token = jwt.encode(

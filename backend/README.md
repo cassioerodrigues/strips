@@ -134,6 +134,54 @@ Todas as tabelas têm RLS habilitado. O acesso é controlado por funções:
 - **editor** — lê e escreve, mas não pode deletar membros ou mudar papéis
 - **viewer** — apenas leitura
 
+## Rodar testes
+
+A suíte de testes vive em `backend/tests/` e tem duas camadas:
+
+1. **Unit / smoke tests** (sempre rodam) — validam schemas, helpers e
+   roteamento mockando o banco. Não exigem Postgres.
+2. **Integration tests** (`test_auth.py`, `test_people.py`, `test_unions.py`,
+   `test_media.py`, `test_rls.py`) — usam um banco real e JWTs assinados.
+   São **automaticamente pulados** quando `TEST_DATABASE_URL` ou
+   `SUPABASE_JWT_SECRET` não estão no ambiente.
+
+### Rodar apenas a parte que não precisa de banco
+
+```bash
+cd /srv/strips/backend
+.venv/bin/pytest -q
+```
+
+Tudo verde + 19 `skipped` (testes que esperam banco).
+
+### Rodar a suíte completa (com Supabase local)
+
+```bash
+# 1. Subir Supabase (Postgres + Auth + Storage) localmente
+cd /srv/strips/backend
+supabase start
+
+# 2. Aplicar migrations (ver seção "Aplicar migrations" acima)
+#    Opção mais rápida quando supabase/migrations/ já está sincronizado:
+supabase db reset
+
+# 3. Exportar credenciais que os testes esperam:
+export TEST_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+export SUPABASE_JWT_SECRET="$(supabase status -o json | jq -r .JWT_SECRET)"
+
+# 4. Rodar a suíte
+.venv/bin/pytest -v
+```
+
+> O `TEST_DATABASE_URL` precisa ser o DSN de **superuser/service-role** —
+> as fixtures inserem em `auth.users` para criar usuários de teste.
+
+### Rodar apenas o test_rls.py (os 6 cenários críticos)
+
+```bash
+.venv/bin/pytest tests/test_rls.py -v
+```
+
 ## Próximos passos
 
 1. Decidir framework backend (FastAPI ou Django) e implementar API REST

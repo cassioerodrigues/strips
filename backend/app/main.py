@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
-    @app.get("/healthz")
+    @app.get("/api/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 

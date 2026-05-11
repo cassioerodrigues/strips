@@ -11,7 +11,7 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 | Mockup do frontend | Pronto (React via CDN, sem build system) |
 | Schema do banco | Pronto (PostgreSQL/Supabase, migrations 0001–0008) |
 | Seed de dev | Pronto (carrega o mockup no banco) |
-| API backend | Não iniciada (FastAPI ou Django, decisão futura) |
+| API backend | v1 (FastAPI) |
 | Auth & Storage | Schema preparado, integração com Supabase ainda não plugada |
 | Integração FamilySearch | Schema preparado (`external_records`, `family_search_id`) |
 

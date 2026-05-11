@@ -189,3 +189,57 @@ export SUPABASE_JWT_SECRET="$(supabase status -o json | jq -r .JWT_SECRET)"
 3. Implementar cliente de Storage para upload de mídia
 4. Integrar com FamilySearch (populando `external_records`)
 5. Testes automatizados de schema e RLS
+
+## Subir a API
+
+A API (FastAPI + uvicorn) é a v1 do backend. Roda em `127.0.0.1:8001`
+local e é exposta em produção atrás de `https://cassiorodrigues.tech/strips/api/`
+via nginx.
+
+### Variáveis de ambiente
+
+Copie `backend/.env.example` para `backend/.env` e preencha. As chaves
+obrigatórias são:
+
+- `APP_ENV` — `development` ou `production`. Em `production`, exceções
+  não tratadas viram `500` sanitizado.
+- `DATABASE_URL` — DSN do Postgres (Supabase).
+- `SUPABASE_URL` — URL do projeto Supabase (auth + storage).
+- `SUPABASE_JWT_SECRET` — segredo HS256 que valida os JWTs do Supabase Auth.
+- `SUPABASE_SERVICE_ROLE_KEY` — usada para emitir URLs assinadas de storage.
+- `SUPABASE_STORAGE_BUCKET` — nome do bucket (em prod: `stirps-media`).
+- `CORS_ORIGINS` — domínios autorizados a chamar a API, separados por vírgula.
+
+### Rodar localmente
+
+```bash
+cd /srv/strips/backend
+.venv/bin/uvicorn app.main:app --reload --port 8001
+# em outra janela:
+curl http://127.0.0.1:8001/api/healthz
+```
+
+### Subir em produção
+
+Os artefatos de deploy estão versionados em `/srv/strips/deploy/`:
+
+```bash
+# systemd
+cp /srv/strips/deploy/strips-api.service /etc/systemd/system/strips-api.service
+systemctl daemon-reload
+systemctl enable --now strips-api
+
+# nginx — inserir o snippet de deploy/nginx-strips-api.conf dentro do
+# `server { ... }` existente em /etc/nginx/sites-available/cassiorodrigues.tech,
+# então:
+nginx -t && systemctl reload nginx
+```
+
+A API fica disponível em `https://cassiorodrigues.tech/strips/api/`.
+
+### Permissões do `.env`
+
+O unit do systemd roda o serviço como `www-data`. O `/srv/strips/backend/.env`
+precisa ser legível por esse usuário — hoje está com modo `644` `root:root`,
+o que basta. Se algum dia o modo mudar para `600`, troque o dono para
+`www-data:www-data` (ou mantenha `644` para legibilidade global).

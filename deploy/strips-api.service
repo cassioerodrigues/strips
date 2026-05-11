@@ -1,0 +1,14 @@
+[Unit]
+Description=Stirps FastAPI backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/strips/backend
+EnvironmentFile=/srv/strips/backend/.env
+ExecStart=/srv/strips/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001
+Restart=on-failure
+User=www-data
+
+[Install]
+WantedBy=multi-user.target

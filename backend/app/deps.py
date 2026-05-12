@@ -21,12 +21,12 @@ def get_current_user(
         )
     token = authorization[len("Bearer "):]
     settings = get_settings()
-    if not settings.supabase_jwt_secret:
+    if not settings.supabase_url:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "SUPABASE_JWT_SECRET not configured",
+            "SUPABASE_URL not configured",
         )
-    return decode_jwt(token, settings.supabase_jwt_secret)
+    return decode_jwt(token, settings.supabase_jwks_url)
 
 
 def get_db_authenticated(

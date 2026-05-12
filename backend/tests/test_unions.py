@@ -16,8 +16,8 @@ import uuid
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv("TEST_DATABASE_URL") or not os.getenv("SUPABASE_JWT_SECRET"),
-    reason="TEST_DATABASE_URL e SUPABASE_JWT_SECRET necessários",
+    not os.getenv("TEST_DATABASE_URL"),
+    reason="TEST_DATABASE_URL necessário",
 )
 
 

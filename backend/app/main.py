@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import lifespan
 from app.errors import register_exception_handlers
-from app.routers import auth, events, media, parents, people, stats, trees, unions
+from app.routers import auth, events, media, members, parents, people, stats, trees, unions
 
 
 def create_app() -> FastAPI:
@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(trees.router)
+    app.include_router(members.router)
     app.include_router(people.router)
     app.include_router(parents.router)
     app.include_router(unions.router)

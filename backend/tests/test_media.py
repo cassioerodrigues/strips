@@ -3,7 +3,7 @@ test_media.py — fluxo de mídia + signed URL via banco real (Issue #10).
 
 A camada HTTP do Supabase Storage é interceptada por `respx`; o banco
 real é usado para a tabela `media` e RLS. Pulado quando TEST_DATABASE_URL
-/ SUPABASE_JWT_SECRET ausentes.
+ausente.
 
 Cobre:
   - POST /api/trees/{id}/media/upload-url chama o gateway de Storage.

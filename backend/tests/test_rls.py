@@ -10,7 +10,7 @@ Mapeia 1:1 os 6 cenários da especificação:
   5. Owner has full access — owner faz tudo na sua árvore.
   6. Cascade on person delete — DELETE em person derruba events e person_parents.
 
-Pulado quando TEST_DATABASE_URL/SUPABASE_JWT_SECRET ausentes — ver README.
+Pulado quando TEST_DATABASE_URL ausente — ver README.
 """
 from __future__ import annotations
 

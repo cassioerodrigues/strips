@@ -9,10 +9,11 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 | Camada | Estado |
 |---|---|
 | Mockup do frontend | Pronto (React via CDN, sem build system) |
-| Schema do banco | Pronto (PostgreSQL/Supabase, migrations 0001–0008) |
+| Schema do banco | Pronto (PostgreSQL/Supabase, migrations 0001–0011) |
 | Seed de dev | Pronto (carrega o mockup no banco) |
-| API backend | v1 (FastAPI) |
-| Auth & Storage | Schema preparado, integração com Supabase ainda não plugada |
+| API backend | v1 (FastAPI) — routers `trees`, `members`, `people`, `parents`, `unions`, `events`, `media`, `external_records`, `stats`, `timeline`, `auth` |
+| Auth backend | JWT ES256 via JWKS Supabase (plug no frontend ainda pendente) |
+| Storage | Cliente assíncrono pronto (`app/storage.py`); falta plugar no frontend |
 | Integração FamilySearch | Schema preparado (`external_records`, `family_search_id`) |
 
 ## Estrutura do repositório
@@ -20,14 +21,21 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 ```
 .
 ├── frontend/            mockup React (CDN) — Stirps.html é o entry point
-│   ├── components/      JSX components (app, tree, profile, dashboard, ...)
+│   ├── components/      JSX components (app, tree, profile, dashboard, modals, ...)
 │   ├── scripts/         data.js com FAMILY mockada (19 pessoas, 6 uniões)
 │   └── stylesheets/     CSS
-└── backend/             schema do banco e seed
-    ├── db/migrations/   8 arquivos SQL aplicados em ordem
-    ├── db/seed/         script Python que popula o banco a partir do mockup
-    ├── requirements-seed.txt
-    └── README.md        instruções detalhadas de setup
+├── template/            referência de design (frontend espelhado + protótipo
+│                        da página Settings). Não é servido em produção;
+│                        existe apenas para comparar layouts ao iterar o
+│                        frontend ativo.
+├── backend/             FastAPI + schema do banco
+│   ├── app/             aplicação (routers, services, schemas, auth, storage)
+│   ├── db/migrations/   migrations SQL aplicadas em ordem (0001–0011)
+│   ├── db/seed/         script Python que popula o banco a partir do mockup
+│   ├── tests/           suíte pytest (unit + integração)
+│   └── README.md        instruções detalhadas de setup
+├── deploy/              snippets de produção (nginx + systemd)
+└── docs/                planos e specs (superpowers/)
 ```
 
 ## Como rodar o frontend (mockup)
@@ -74,10 +82,10 @@ O design completo, com justificativas e DDL, está em `backend/db/migrations/` e
 
 ## Próximos passos
 
-1. Escolher framework backend (FastAPI ou Django) e implementar API REST.
-2. Plugar autenticação Supabase no frontend.
-3. Substituir `data.js` estático por chamadas à API.
-4. Subir cliente de Storage para upload de mídia (aba "Galeria" do perfil).
+1. Plugar autenticação Supabase no frontend (login/signup → token ES256).
+2. Substituir `data.js` estático por chamadas à API.
+3. Conectar upload de mídia ao Supabase Storage (aba "Galeria" do perfil).
+4. Portar a página Settings de `template/` para o frontend ativo.
 5. Integrar busca em arquivos externos com FamilySearch e congêneres.
 
 ## Licença

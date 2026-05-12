@@ -6,7 +6,7 @@ Cobre:
   - O CHECK constraint (partner_a_id < partner_b_id) nunca é violado pelo serviço.
   - Mesmo casal mesma data → unique_violation (409).
 
-Pulado quando TEST_DATABASE_URL/SUPABASE_JWT_SECRET ausentes.
+Pulado quando TEST_DATABASE_URL ausente.
 """
 from __future__ import annotations
 

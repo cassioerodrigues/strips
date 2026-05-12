@@ -141,9 +141,9 @@ A suíte de testes vive em `backend/tests/` e tem duas camadas:
 1. **Unit / smoke tests** (sempre rodam) — validam schemas, helpers e
    roteamento mockando o banco. Não exigem Postgres.
 2. **Integration tests** (`test_auth.py`, `test_people.py`, `test_unions.py`,
-   `test_media.py`, `test_rls.py`) — usam um banco real e JWTs assinados.
-   São **automaticamente pulados** quando `TEST_DATABASE_URL` ou
-   `SUPABASE_JWT_SECRET` não estão no ambiente.
+   `test_media.py`, `test_rls.py`) — usam um banco real e JWTs ES256 assinados
+   pelo keypair do `conftest.py`. São **automaticamente pulados** quando
+   `TEST_DATABASE_URL` não está no ambiente.
 
 ### Rodar apenas a parte que não precisa de banco
 
@@ -165,9 +165,8 @@ supabase start
 #    Opção mais rápida quando supabase/migrations/ já está sincronizado:
 supabase db reset
 
-# 3. Exportar credenciais que os testes esperam:
+# 3. Exportar credencial que os testes esperam:
 export TEST_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-export SUPABASE_JWT_SECRET="$(supabase status -o json | jq -r .JWT_SECRET)"
 
 # 4. Rodar a suíte
 .venv/bin/pytest -v
@@ -184,11 +183,10 @@ export SUPABASE_JWT_SECRET="$(supabase status -o json | jq -r .JWT_SECRET)"
 
 ## Próximos passos
 
-1. Decidir framework backend (FastAPI ou Django) e implementar API REST
-2. Plugar Supabase Auth no frontend para login/signup
-3. Implementar cliente de Storage para upload de mídia
+1. Plugar Supabase Auth no frontend para login/signup (token ES256)
+2. Trocar `frontend/scripts/data.js` por chamadas à API
+3. Conectar upload de mídia ao Supabase Storage no frontend
 4. Integrar com FamilySearch (populando `external_records`)
-5. Testes automatizados de schema e RLS
 
 ## Subir a API
 
@@ -204,8 +202,8 @@ obrigatórias são:
 - `APP_ENV` — `development` ou `production`. Em `production`, exceções
   não tratadas viram `500` sanitizado.
 - `DATABASE_URL` — DSN do Postgres (Supabase).
-- `SUPABASE_URL` — URL do projeto Supabase (auth + storage).
-- `SUPABASE_JWT_SECRET` — segredo HS256 que valida os JWTs do Supabase Auth.
+- `SUPABASE_URL` — URL do projeto Supabase (auth + storage). A URL do JWKS
+  ES256 é derivada dela em `app/config.py` (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`).
 - `SUPABASE_SERVICE_ROLE_KEY` — usada para emitir URLs assinadas de storage.
 - `SUPABASE_STORAGE_BUCKET` — nome do bucket (em prod: `stirps-media`).
 - `CORS_ORIGINS` — domínios autorizados a chamar a API, separados por vírgula.

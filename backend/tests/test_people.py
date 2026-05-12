@@ -4,7 +4,7 @@ test_people.py — CRUD de pessoas + /relations + /events com banco real (Issue 
 Cobre os endpoints de people.py contra o app montado com pool real e JWT
 assinado, garantindo que RLS deixa o owner operar normalmente.
 
-Pulado quando TEST_DATABASE_URL/SUPABASE_JWT_SECRET ausentes.
+Pulado quando TEST_DATABASE_URL ausente.
 """
 from __future__ import annotations
 

@@ -110,19 +110,22 @@ function Dashboard({ onNavigate, onPersonClick }) {
             </div>
           </div>
           <div className="timeline">
-            <div className="timeline-track"/>
-            {F.timeline.map((t, i) => (
-              <div key={i} className="tl-event" style={{ left: `${(t.year - 1875) / (2026 - 1875) * 100}%` }}>
-                <div className="tl-dot"/>
-                <div className="tl-card">
-                  <div className="tl-year">{t.year}</div>
-                  <div className="tl-label">{t.label}</div>
-                  <div className="tl-place">{t.place}</div>
+            <div className="timeline-inner">
+              <div className="timeline-track"/>
+              {F.timeline.map((t, i, arr) => (
+                <div key={i} className="tl-event" style={{ left: `calc(70px + ${arr.length > 1 ? i / (arr.length - 1) : 0.5} * (100% - 140px))` }}>
+                  <div className="tl-dot"/>
+                  <div className="tl-card">
+                    <div className="tl-year">{t.year}</div>
+                    <div className="tl-label">{t.label}</div>
+                    <div className="tl-place">{t.place}</div>
+                  </div>
                 </div>
+              ))}
+              <div className="timeline-axis">
+                <span>{F.timeline[0]?.year}</span>
+                <span>{F.timeline[F.timeline.length - 1]?.year}</span>
               </div>
-            ))}
-            <div className="timeline-axis">
-              <span>1880</span><span>1920</span><span>1960</span><span>2000</span><span>2026</span>
             </div>
           </div>
         </Card>

@@ -52,22 +52,40 @@ function computeLayout(focusId) {
     });
   });
 
-  // Build parent-child links via parents[]
+  // Build parent-child links grouped by couple → orthogonal bus
+  const byParents = {};
   Object.values(people).forEach(p => {
-    if (p.parents && p.parents.length) {
-      const parentNodes = p.parents.map(pid => layout.nodes[pid]).filter(Boolean);
-      if (parentNodes.length === 0) return;
-      const childNode = layout.nodes[p.id];
-      if (!childNode) return;
-      const parentMidX = parentNodes.reduce((s,n) => s+n.x, 0) / parentNodes.length;
-      layout.links.push({
-        fromX: parentMidX + NODE_W/2,
-        fromY: parentNodes[0].y + NODE_H,
-        toX: childNode.x + NODE_W/2,
-        toY: childNode.y,
-        type: "parent",
-      });
+    if (!p.parents || !p.parents.length) return;
+    const childNode = layout.nodes[p.id];
+    if (!childNode) return;
+    const parentNodes = p.parents.map(pid => layout.nodes[pid]).filter(Boolean);
+    if (!parentNodes.length) return;
+    const key = [...p.parents].sort().join("|");
+    if (!byParents[key]) byParents[key] = { parents: parentNodes, children: [] };
+    byParents[key].children.push(childNode);
+  });
+  Object.values(byParents).forEach(group => {
+    const parentMidX = group.parents.reduce((s,n) => s+n.x + NODE_W/2, 0) / group.parents.length;
+    const parentBottomY = group.parents[0].y + NODE_H;
+    const parentMidY = group.parents[0].y + NODE_H / 2;
+    const childTopY = group.children[0].y;
+    const busY = parentBottomY + (childTopY - parentBottomY) / 2;
+    // Line origin: from the union ring center if couple, else from bottom of the (single) parent card
+    const isCouple = group.parents.length === 2;
+    const originY = isCouple ? parentMidY : parentBottomY;
+    // 1. drop from union point to bus
+    layout.links.push({ type: "drop", x: parentMidX, y1: originY, y2: busY, fromUnion: isCouple });
+    // 2. horizontal bus across all children x's
+    const childXs = group.children.map(c => c.x + NODE_W/2);
+    const busMinX = Math.min(parentMidX, ...childXs);
+    const busMaxX = Math.max(parentMidX, ...childXs);
+    if (busMaxX - busMinX > 0.5) {
+      layout.links.push({ type: "bus", x1: busMinX, x2: busMaxX, y: busY });
     }
+    // 3. drop from bus to each child top
+    group.children.forEach(c => {
+      layout.links.push({ type: "drop", x: c.x + NODE_W/2, y1: busY, y2: c.y, toChild: true });
+    });
   });
 
   // Marriage/union links (horizontal)
@@ -91,7 +109,6 @@ function TreeNode({ p, x, y, focused, dimmed, onClick, onHover }) {
   // Sex-based accent: men petrol, women terracotta
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
   const isLiving = !p.death;
-  const tagText = p.tags?.[0];
 
   return (
     <div
@@ -113,7 +130,6 @@ function TreeNode({ p, x, y, focused, dimmed, onClick, onHover }) {
           </div>
         </div>
       </div>
-      {tagText && <div className="tnode-tag">{tagText}</div>}
     </div>
   );
 }
@@ -125,6 +141,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const [pan, setPan] = React.useState({ x: 60, y: 40 });
   const [hover, setHover] = React.useState(null);
   const [highlightLineage, setHighlightLineage] = React.useState(null); // null|"paternal"|"maternal"
+  const [addOpen, setAddOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const dragRef = React.useRef(null);
 
@@ -227,31 +244,13 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
       {/* Tree toolbar */}
       <div className="tree-toolbar">
         <div className="tree-toolbar-left">
-          <button className={"chip " + (highlightLineage === null ? "chip-on" : "")} onClick={() => setHighlightLineage(null)}>Toda a família</button>
-          <button className={"chip " + (highlightLineage === "paternal" ? "chip-on chip-olive" : "")} onClick={() => setHighlightLineage("paternal")}>
-            <span className="chip-dot" style={{background: "#5b6e4f"}}/>Linhagem paterna
-          </button>
-          <button className={"chip " + (highlightLineage === "maternal" ? "chip-on chip-petrol" : "")} onClick={() => setHighlightLineage("maternal")}>
-            <span className="chip-dot" style={{background: "#3a5b6b"}}/>Linhagem materna
-          </button>
-          <div className="chip-sep"/>
           <button className="chip"><Icon name="filter" size={13}/>Filtros</button>
           <button className="chip"><Icon name="calendar" size={13}/>Por época</button>
         </div>
         <div className="tree-toolbar-right">
-          <div className="tree-stat"><strong>5</strong> gerações</div>
-          <div className="tree-stat"><strong>17</strong> pessoas</div>
-          <button className="btn btn-sm btn-primary"><Icon name="plus" size={14}/>Adicionar pessoa</button>
+          <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>
+          {window.AddPersonModal && <window.AddPersonModal open={addOpen} onClose={() => setAddOpen(false)}/>}
         </div>
-      </div>
-
-      {/* Generation rail */}
-      <div className="gen-rail">
-        {[1,2,3,4,5].map(g => (
-          <div key={g} className="gen-rail-row" style={{ top: (g-1) * (NODE_H + ROW_GAP) * zoom + pan.y - 12 }}>
-            <span className="gen-rail-label">G{g} · {gen_label(g)}</span>
-          </div>
-        ))}
       </div>
 
       {/* Canvas */}
@@ -283,15 +282,23 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
                   <g key={i}>
                     <line x1={l.fromX} y1={l.fromY} x2={cx - gap} y2={cy} stroke="#a08658" strokeWidth="1.6"/>
                     <line x1={cx + gap} y1={cy} x2={l.toX} y2={l.toY} stroke="#a08658" strokeWidth="1.6"/>
-                    {/* wedding rings */}
                     <circle cx={cx - 3.5} cy={cy} r="4.2" fill="none" stroke="#a08658" strokeWidth="1.4"/>
                     <circle cx={cx + 3.5} cy={cy} r="4.2" fill="none" stroke="#a08658" strokeWidth="1.4"/>
                   </g>
                 );
               }
-              const midY = (l.fromY + l.toY) / 2;
-              const path = `M ${l.fromX} ${l.fromY} C ${l.fromX} ${midY}, ${l.toX} ${midY}, ${l.toX} ${l.toY}`;
-              return <path key={i} d={path} fill="none" stroke="rgba(60,60,55,0.32)" strokeWidth="1.4"/>;
+              if (l.type === "drop") {
+                return (
+                  <g key={i}>
+                    <line x1={l.x} y1={l.y1} x2={l.x} y2={l.y2} stroke="rgba(70,65,55,0.42)" strokeWidth="1.4" strokeLinecap="round"/>
+                    {l.fromUnion && <circle cx={l.x} cy={l.y1 + 10.5} r="2.4" fill="#a08658"/>}
+                  </g>
+                );
+              }
+              if (l.type === "bus") {
+                return <line key={i} x1={l.x1} y1={l.y} x2={l.x2} y2={l.y} stroke="rgba(70,65,55,0.42)" strokeWidth="1.4" strokeLinecap="round"/>;
+              }
+              return null;
             })}
           </svg>
           {/* nodes */}
@@ -319,7 +326,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
 
         {/* Legend */}
         <div className="tree-legend">
-          <div className="tree-legend-row"><span className="legend-line" style={{background:"rgba(60,60,55,0.45)"}}/>Filiação</div>
+          <div className="tree-legend-row"><span className="legend-line" style={{background:"rgba(70,65,55,0.55)"}}/>Filiação</div>
           <div className="tree-legend-row"><span className="legend-line" style={{background:"#a08658"}}/>União / casamento</div>
           <div className="tree-legend-row"><span className="legend-dot" style={{background:"#2c4a59"}}/>Homem</div>
           <div className="tree-legend-row"><span className="legend-dot" style={{background:"#a85d3a"}}/>Mulher</div>

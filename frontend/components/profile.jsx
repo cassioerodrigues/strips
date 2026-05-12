@@ -4,6 +4,8 @@ function Profile({ personId, onBack, onPersonClick }) {
   const F = window.FAMILY;
   const p = F.people[personId];
   const [tab, setTab] = React.useState("bio");
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [eventOpen, setEventOpen] = React.useState(false);
   if (!p) return null;
 
   // Find relations
@@ -48,8 +50,10 @@ function Profile({ personId, onBack, onPersonClick }) {
         </div>
         <div className="profile-actions">
           <button className="btn btn-ghost"><Icon name="share" size={14}/>Compartilhar</button>
-          <button className="btn btn-ghost"><Icon name="edit" size={14}/>Editar</button>
-          <button className="btn btn-primary"><Icon name="plus" size={14}/>Adicionar evento</button>
+          <button className="btn btn-ghost" onClick={() => setEditOpen(true)}><Icon name="edit" size={14}/>Editar</button>
+          <button className="btn btn-primary" onClick={() => setEventOpen(true)}><Icon name="plus" size={14}/>Adicionar evento</button>
+          {window.EditPersonModal && <window.EditPersonModal open={editOpen} person={p} onClose={() => setEditOpen(false)}/>}
+          {window.AddEventModal && <window.AddEventModal open={eventOpen} person={p} onClose={() => setEventOpen(false)}/>}
         </div>
       </div>
 

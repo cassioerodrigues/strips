@@ -49,6 +49,16 @@ function Icon({ name, size = 18 }) {
     case "minus": return <svg {...common}><path d="M5 12h14"/></svg>;
     case "calendar": return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>;
     case "globe": return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>;
+    case "arrow-left": return <svg {...common}><path d="M19 12H5M5 12l6-6M5 12l6 6"/></svg>;
+    case "arrow-right": return <svg {...common}><path d="M5 12h14M14 6l6 6M14 18l6-6"/></svg>;
+    case "trash": return <svg {...common}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>;
+    case "user": return <svg {...common}><circle cx="12" cy="8" r="4"/><path d="M4 20c1-4 4-6 8-6s7 2 8 6"/></svg>;
+    case "book": return <svg {...common}><path d="M5 4h10a4 4 0 014 4v12H9a4 4 0 01-4-4z"/><path d="M5 16a4 4 0 014-4h10"/></svg>;
+    case "settings": return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>;
+    case "briefcase": return <svg {...common}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M3 13h18"/></svg>;
+    case "star": return <svg {...common}><path d="M12 3l2.6 5.6 6.1.7-4.6 4.2 1.3 6L12 16.8 6.6 19.5 7.9 13.5 3.3 9.3l6.1-.7z"/></svg>;
+    case "moon": return <svg {...common}><path d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 0010.5 10.5z"/></svg>;
+    case "link": return <svg {...common}><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>;
     default: return null;
   }
 }

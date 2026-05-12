@@ -2,8 +2,8 @@
 conftest.py — fixtures compartilhadas para os testes de integração da Issue #10.
 
 Todas as fixtures de banco são puladas (`pytest.skip`) quando `TEST_DATABASE_URL`
-ou `SUPABASE_JWT_SECRET` não estão definidos no ambiente — assim o arquivo pode
-conviver com a suite de smoke tests existente sem exigir Postgres.
+não está definido no ambiente — assim o arquivo pode conviver com a suite de
+smoke tests existente sem exigir Postgres.
 
 Para rodar os testes integrados, ver `README.md` seção "Rodar testes".
 """
@@ -16,15 +16,33 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
 
 # ---------------------------------------------------------------------------
-# Env-var gating: tudo que precisa de banco real depende destas duas vars.
+# Env-var gating: tudo que precisa de banco real depende de TEST_DATABASE_URL.
 # ---------------------------------------------------------------------------
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-TEST_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 
-_DB_AVAILABLE = bool(TEST_DATABASE_URL) and bool(TEST_JWT_SECRET)
+_DB_AVAILABLE = bool(TEST_DATABASE_URL)
+
+
+# ---------------------------------------------------------------------------
+# Keypair ES256 de teste — gerado por processo. As fixtures assinam JWTs com
+# a chave privada; o mock de PyJWKClient devolve a pública. Substitui o
+# antigo SUPABASE_JWT_SECRET (HS256) — não é mais necessário nos testes.
+# ---------------------------------------------------------------------------
+
+_TEST_PRIVATE_KEY = ec.generate_private_key(ec.SECP256R1())
+_TEST_PUBLIC_KEY = _TEST_PRIVATE_KEY.public_key()
+_TEST_KID = "test-kid"
+
+
+@pytest.fixture
+def jwt_keypair() -> tuple:
+    """Devolve (private_key, kid) para testes que precisam assinar JWTs
+    fora da fixture make_user (e.g. test_auth.py)."""
+    return _TEST_PRIVATE_KEY, _TEST_KID
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +70,7 @@ def db_pool():
     """
     if not _DB_AVAILABLE:
         pytest.skip(
-            "TEST_DATABASE_URL e SUPABASE_JWT_SECRET necessários para testes integrados"
+            "TEST_DATABASE_URL necessário para testes integrados"
         )
 
     from psycopg_pool import ConnectionPool
@@ -72,22 +90,36 @@ def db_pool():
 
 @pytest.fixture(autouse=True)
 def _patch_settings_for_tests(monkeypatch):
-    """Garante que get_settings() reflita TEST_DATABASE_URL / SUPABASE_JWT_SECRET
-    nos handlers do FastAPI (sem precisar de .env separado para testes).
-
-    Como get_settings() é @lru_cache, limpamos o cache antes/depois.
+    """Garante que get_settings() reflita TEST_DATABASE_URL nos handlers do
+    FastAPI e mocka PyJWKClient para devolver a chave pública de teste.
     """
     from app.config import get_settings
 
     get_settings.cache_clear()
     if TEST_DATABASE_URL:
         monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
-    if TEST_JWT_SECRET:
-        monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
-    # Storage HTTP é mockado em test_media.py via respx — basta um valor fake.
+    # supabase_url é só usado para derivar supabase_jwks_url; um valor
+    # fake basta porque PyJWKClient está mockado.
     monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test")
     monkeypatch.setenv("SUPABASE_STORAGE_BUCKET", "stirps-media")
+
+    # Mock do JWKS — devolve sempre a chave pública de teste.
+    class _FakeSigningKey:
+        def __init__(self, key):
+            self.key = key
+
+    def fake_get_signing_key_from_jwt(self, token):
+        return _FakeSigningKey(_TEST_PUBLIC_KEY)
+
+    monkeypatch.setattr(
+        "jwt.PyJWKClient.get_signing_key_from_jwt",
+        fake_get_signing_key_from_jwt,
+    )
+    # Limpar o cache de cliente global em app.auth entre testes.
+    import app.auth
+    app.auth._jwk_client = None
+
     yield
     get_settings.cache_clear()
 
@@ -159,8 +191,9 @@ def make_user(db_pool) -> Iterator[MakeUserFn]:
                 "iat": int(datetime.now(timezone.utc).timestamp()),
                 "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             },
-            TEST_JWT_SECRET,
-            algorithm="HS256",
+            _TEST_PRIVATE_KEY,
+            algorithm="ES256",
+            headers={"kid": _TEST_KID},
         )
         created.append(uid)
         return uid, token

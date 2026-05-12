@@ -309,7 +309,10 @@ def rls_conn(db_pool):
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute("SET LOCAL ROLE authenticated")
-                    cur.execute('SET LOCAL "request.jwt.claims" = %s', (claims,))
+                    cur.execute(
+                        "SELECT set_config('request.jwt.claims', %s, true)",
+                        (claims,),
+                    )
                 yield conn
 
     return _open

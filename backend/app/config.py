@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = ""
     supabase_url: str = ""
-    supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""
     supabase_storage_bucket: str = "stirps-media"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:8000"]
@@ -27,6 +26,11 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [s.strip() for s in v.split(",") if s.strip()]
         return v
+
+    @property
+    def supabase_jwks_url(self) -> str:
+        """URL do JWKS pública do Supabase Auth, derivada de supabase_url."""
+        return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
 
 
 @lru_cache

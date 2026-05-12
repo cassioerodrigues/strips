@@ -17,11 +17,11 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
-_DB_AVAILABLE = bool(os.getenv("TEST_DATABASE_URL")) and bool(os.getenv("SUPABASE_JWT_SECRET"))
+_DB_AVAILABLE = bool(os.getenv("TEST_DATABASE_URL"))
 
 pytestmark = pytest.mark.skipif(
     not _DB_AVAILABLE,
-    reason="TEST_DATABASE_URL e SUPABASE_JWT_SECRET necessários",
+    reason="TEST_DATABASE_URL necessário",
 )
 
 
@@ -33,9 +33,17 @@ async def test_me_without_authorization_returns_401(client):
 
 
 @pytest.mark.anyio
-async def test_me_with_invalid_jwt_returns_401(client):
-    """JWT assinado com segredo errado → InvalidTokenError → 401."""
-    bad = jwt.encode({"sub": "not-a-uuid"}, "wrong-secret", algorithm="HS256")
+async def test_me_with_invalid_jwt_returns_401(client, jwt_keypair):
+    """JWT assinado com chave EC errada → InvalidSignatureError → 401."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+    _, kid = jwt_keypair
+    wrong_key = ec.generate_private_key(ec.SECP256R1())
+    bad = jwt.encode(
+        {"sub": "not-a-uuid"},
+        wrong_key,
+        algorithm="ES256",
+        headers={"kid": kid},
+    )
     async with client(token=bad) as c:
         resp = await c.get("/api/me")
     assert resp.status_code == 401
@@ -70,7 +78,7 @@ async def test_me_includes_owned_tree_after_create(client, make_user):
 
 
 @pytest.mark.anyio
-async def test_profile_autocreated_on_signup(client, db_pool):
+async def test_profile_autocreated_on_signup(client, db_pool, jwt_keypair):
     """Regressão da Issue #12: inserir apenas em `auth.users` (simulando signup
     via Supabase Auth) já deve disparar a trigger que cria a linha em `profiles`.
 
@@ -92,6 +100,7 @@ async def test_profile_autocreated_on_signup(client, db_pool):
                 )
             conn.commit()
 
+        private_key, kid = jwt_keypair
         token = jwt.encode(
             {
                 "sub": str(uid),
@@ -100,8 +109,9 @@ async def test_profile_autocreated_on_signup(client, db_pool):
                 "iat": int(datetime.now(timezone.utc).timestamp()),
                 "exp": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             },
-            os.environ["SUPABASE_JWT_SECRET"],
-            algorithm="HS256",
+            private_key,
+            algorithm="ES256",
+            headers={"kid": kid},
         )
 
         async with client(token=token) as c:

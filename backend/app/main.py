@@ -13,6 +13,7 @@ from app.routers import (
     parents,
     people,
     stats,
+    timeline,
     trees,
     unions,
 )
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(media.router)
     app.include_router(external_records.router)
     app.include_router(stats.router)
+    app.include_router(timeline.router)
 
     return app
 

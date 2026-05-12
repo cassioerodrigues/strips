@@ -34,8 +34,7 @@ function App() {
   }, []);
 
   function navigate(r) {
-    if (r === "settings" || r === "help") {
-      // pretend page
+    if (r === "help") {
       setRoute("dashboard");
     } else {
       setRoute(r);
@@ -57,6 +56,7 @@ function App() {
       people: ["Stirps", "Pessoas"],
       timeline: ["Stirps", "Linha do tempo"],
       mobile: ["Stirps", "Mobile companion"],
+      settings: ["Stirps", "Configurações"],
     };
     return map[route] || ["Stirps"];
   })();
@@ -82,6 +82,7 @@ function App() {
         {route === "people" && <PeoplePage onPersonClick={openPerson}/>}
         {route === "timeline" && <TimelinePage/>}
         {route === "mobile" && <MobileShowcase onClose={() => setRoute("dashboard")}/>}
+        {route === "settings" && <SettingsPage onPersonClick={openPerson}/>}
       </main>
       <CommandPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} onPersonClick={openPerson}/>
       <StirpsTweaks tweaks={t}/>

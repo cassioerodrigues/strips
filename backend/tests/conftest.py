@@ -137,9 +137,12 @@ def make_user(db_pool) -> Iterator[MakeUserFn]:
                     "INSERT INTO auth.users (id, email) VALUES (%s, %s)",
                     (uid, email),
                 )
+                # A trigger `on_auth_user_created` (migration 0009) já criou a linha
+                # em `profiles` com um display_name derivado do email. Atualizamos
+                # para o valor pedido pelo teste (ex.: "Alice", "Bob").
                 cur.execute(
-                    "INSERT INTO profiles (id, display_name) VALUES (%s, %s)",
-                    (uid, display_name),
+                    "UPDATE profiles SET display_name = %s WHERE id = %s",
+                    (display_name, uid),
                 )
                 if role is not None:
                     cur.execute(

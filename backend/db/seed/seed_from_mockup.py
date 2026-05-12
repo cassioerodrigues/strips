@@ -151,12 +151,20 @@ def run_seed(
         ))
 
     # 2. profile do dono
+    # A trigger `on_auth_user_created` (migration 0009) pode já ter criado a linha
+    # com um display_name derivado do email; o INSERT serve para o caso de owner
+    # externo (sem auth.users novo) e o UPDATE garante que o nome escolhido aqui
+    # prevaleça sobre o default da trigger.
     owner_display = "Helena Bertolini Albuquerque" if create_auth_row else f"owner:{owner_id[:8]}"
     stmts.append((
         """INSERT INTO profiles(id, display_name, locale)
            VALUES (%s, %s, 'pt-BR')
            ON CONFLICT DO NOTHING""",
         (owner_id, owner_display),
+    ))
+    stmts.append((
+        "UPDATE profiles SET display_name = %s WHERE id = %s",
+        (owner_display, owner_id),
     ))
 
     # 3. tree

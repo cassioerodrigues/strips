@@ -20,14 +20,14 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 
 ```
 .
-├── frontend/            mockup React (CDN) — Stirps.html é o entry point
+├── frontend/            frontend ativo do projeto; Stirps.html é o entry point
 │   ├── components/      JSX components (app, tree, profile, dashboard, modals, ...)
 │   ├── scripts/         data.js com FAMILY mockada (19 pessoas, 6 uniões)
 │   └── stylesheets/     CSS
-├── template/            referência de design (frontend espelhado + protótipo
-│                        da página Settings). Não é servido em produção;
-│                        existe apenas para comparar layouts ao iterar o
-│                        frontend ativo.
+├── template/            arquivos estáticos entregues pelo designer. Não é a
+│                        pasta do frontend ativo e não deve ser servida em
+│                        produção; use apenas como referência visual ao portar
+│                        telas, componentes e estilos para frontend/.
 ├── backend/             FastAPI + schema do banco
 │   ├── app/             aplicação (routers, services, schemas, auth, storage)
 │   ├── db/migrations/   migrations SQL aplicadas em ordem (0001–0011)
@@ -38,11 +38,24 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 └── docs/                planos e specs (superpowers/)
 ```
 
+### Frontend vs. template
+
+- `frontend/` é a implementação usada pelo projeto. Altere esta pasta quando
+  for mexer em telas, componentes, estilos, dados mockados ou no Docker/nginx do
+  frontend.
+- `template/` é material estático de referência produzido pelo designer. Ele
+  pode conter versões de telas ainda não portadas, como a página Settings, mas
+  não é o source-of-truth da aplicação.
+- Ao transformar algo do design em produto, copie/adapte a ideia de
+  `template/` para `frontend/`, mantendo os caminhos e padrões já usados pelo
+  frontend ativo.
+
 ## Como rodar o frontend (mockup)
 
 A versão atual da `main` está sempre disponível em **<http://cassiorodrigues.tech/strips/>** (servida estaticamente pelo nginx do servidor — ver `location /strips/` em `/etc/nginx/sites-available/cassiorodrigues.tech`).
 
-Para rodar localmente, abra `frontend/Stirps.html` direto no navegador ou sirva a pasta com qualquer servidor estático:
+Para rodar localmente, abra `frontend/Stirps.html` direto no navegador ou sirva
+a pasta `frontend/` com qualquer servidor estático:
 
 ```bash
 cd frontend

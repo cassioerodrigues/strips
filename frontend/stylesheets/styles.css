@@ -1060,6 +1060,16 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
 .person-card-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
 .person-card-occ { font-size: 11.5px; color: var(--muted-2); margin-top: 2px; }
 .person-card-gen { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); }
+.person-card-edit {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.74);
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.person-card-edit:hover { color: var(--ink); border-color: var(--line-strong); }
 
 /* ============ TIMELINE PAGE ============ */
 .page-timeline { padding: 28px 32px 60px; max-width: 880px; margin: 0 auto; }

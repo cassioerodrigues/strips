@@ -108,6 +108,9 @@
   // o access_token, que é estável entre os dois eventos para a mesma sessão.
   let meInFlight = false;
   let lastMeAccessToken = null;
+  let meRetryTimer = null;
+  let meRetryAttempts = 0;
+  const ME_RETRY_MAX_ATTEMPTS = 20;
 
   function meKey(session) {
     return session && session.access_token ? session.access_token : null;
@@ -116,15 +119,31 @@
   function resetMeDedup() {
     meInFlight = false;
     lastMeAccessToken = null;
+    meRetryAttempts = 0;
+    if (meRetryTimer) {
+      clearTimeout(meRetryTimer);
+      meRetryTimer = null;
+    }
+  }
+
+  function retryFetchMeWhenApiLoads(sessionForKey) {
+    if (meRetryTimer || meRetryAttempts >= ME_RETRY_MAX_ATTEMPTS) return;
+    meRetryAttempts += 1;
+    meRetryTimer = setTimeout(function () {
+      meRetryTimer = null;
+      fetchMe(sessionForKey);
+    }, 25);
   }
 
   async function fetchMe(sessionForKey) {
     if (!window.api || typeof window.api.me !== "function") {
-      // api.js ainda não carregou — adia
+      // api.js ainda não carregou — auth.js vem antes dele no HTML.
+      retryFetchMeWhenApiLoads(sessionForKey);
       // eslint-disable-next-line no-console
       console.warn("[stirps] window.api.me ausente, pulando refreshMe");
       return;
     }
+    meRetryAttempts = 0;
     // Determina a chave da sessão atual (caller pode passá-la explicitamente
     // para evitar uma corrida entre getSession e setState do listener).
     const key = meKey(sessionForKey) || meKey(state.session);

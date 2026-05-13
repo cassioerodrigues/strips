@@ -776,8 +776,6 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   if (!form) return null;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const canSave = form.first && form.last && form.relTo;
-
   async function save() {
     if (readOnly || saving) return;
     try {
@@ -794,6 +792,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   const peopleArr = sourcePeople.slice().sort((a,b) =>
     (b.birth?.year || 0) - (a.birth?.year || 0)
   );
+  const canSave = form.first && form.last && (form.relTo || sourcePeople.length === 0);
 
   return (
     <ModalShell

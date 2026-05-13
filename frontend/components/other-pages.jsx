@@ -202,6 +202,9 @@ function PeoplePage({ onPersonClick }) {
   const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState("name");
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [editPerson, setEditPerson] = React.useState(null);
+  const [mutation, setMutation] = React.useState({ saving: false, error: null });
 
   // Fonte: API quando "ready", senão FAMILY mock.
   const apiList = tree.status === "ready" ? tree.people : null;
@@ -217,6 +220,50 @@ function PeoplePage({ onPersonClick }) {
   const isLoading = tree.status === "loading" || tree.status === "idle";
   const isError = tree.status === "error" && (!apiList || apiList.length === 0);
   const isEmpty = tree.status === "ready" && apiList.length === 0;
+  const canEdit = tree.status === "ready" ? !!tree.canEdit : true;
+  const readOnlyReason = tree.role === "viewer"
+    ? "Visualizadores não podem editar esta árvore."
+    : "Somente leitura.";
+
+  function friendlyError(e) {
+    if (e && e.status === 403) return "Você não tem permissão para alterar esta árvore.";
+    if (e && e.status === 422) return "Alguns campos não foram aceitos pela API. Revise os dados e tente novamente.";
+    return (e && e.message) || "Não foi possível salvar a alteração.";
+  }
+
+  async function runMutation(fn) {
+    setMutation({ saving: true, error: null });
+    try {
+      await fn();
+      setMutation({ saving: false, error: null });
+    } catch (e) {
+      setMutation({ saving: false, error: friendlyError(e) });
+      throw e;
+    }
+  }
+
+  function saveNewPerson(form) {
+    return runMutation(() => {
+      if (tree.status !== "ready") return Promise.resolve();
+      return window.useTree.actions.createPerson(form);
+    });
+  }
+
+  function saveEditedPerson(form) {
+    if (!editPerson) return Promise.resolve();
+    return runMutation(() => {
+      if (tree.status !== "ready") return Promise.resolve();
+      return window.useTree.actions.updatePerson(editPerson.id, form);
+    });
+  }
+
+  function deleteEditedPerson() {
+    if (!editPerson) return Promise.resolve();
+    return runMutation(() => {
+      if (tree.status !== "ready") return Promise.resolve();
+      return window.useTree.actions.deletePerson(editPerson.id);
+    }).then(() => setEditPerson(null));
+  }
 
   return (
     <div className="page page-people">
@@ -235,6 +282,7 @@ function PeoplePage({ onPersonClick }) {
             <button className={sort==="year"?"seg-on":""} onClick={()=>setSort("year")}>Ano</button>
             <button className={sort==="gen"?"seg-on":""} onClick={()=>setSort("gen")}>Geração</button>
           </div>
+          {canEdit && <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>}
         </div>
       </div>
 
@@ -247,14 +295,21 @@ function PeoplePage({ onPersonClick }) {
       )}
       {isEmpty && (
         <div className="api-empty">
-          Ainda não há pessoas nesta árvore. Use o botão <strong>Adicionar pessoa</strong> na barra lateral para começar.
+          Ainda não há pessoas nesta árvore. Use <strong>Adicionar pessoa</strong> para começar.
         </div>
       )}
 
       {!isLoading && !isEmpty && (
         <div className="people-grid">
           {list.map(p => (
-            <button key={p.id} className="person-card" onClick={() => onPersonClick(p.id)}>
+            <div
+              key={p.id}
+              className="person-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => onPersonClick(p.id)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onPersonClick(p.id); }}
+            >
               <Avatar person={p} size={56}/>
               <div className="person-card-text">
                 <div className="person-card-name">{p.first} {p.last}</div>
@@ -262,10 +317,41 @@ function PeoplePage({ onPersonClick }) {
                 <div className="person-card-occ">{p.occupation}</div>
               </div>
               {p.generation && <div className="person-card-gen">G{p.generation}</div>}
-            </button>
+              {canEdit && (
+                <button
+                  className="person-card-edit"
+                  onClick={e => { e.stopPropagation(); setEditPerson(p); }}
+                  aria-label={"Editar pessoa " + `${p.first} ${p.last}`.trim()}
+                  title="Editar pessoa"
+                >
+                  <Icon name="edit" size={13}/>
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
+      {window.AddPersonModal && <window.AddPersonModal
+        open={addOpen}
+        people={source}
+        onClose={() => setAddOpen(false)}
+        onSave={saveNewPerson}
+        saving={mutation.saving}
+        error={mutation.error}
+        readOnly={!canEdit}
+        readOnlyReason={readOnlyReason}
+      />}
+      {window.EditPersonModal && <window.EditPersonModal
+        open={!!editPerson}
+        person={editPerson}
+        onClose={() => setEditPerson(null)}
+        onSave={saveEditedPerson}
+        onDelete={deleteEditedPerson}
+        saving={mutation.saving}
+        error={mutation.error}
+        readOnly={!canEdit}
+        readOnlyReason={readOnlyReason}
+      />}
     </div>
   );
 }

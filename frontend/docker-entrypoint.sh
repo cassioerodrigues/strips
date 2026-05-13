@@ -9,9 +9,9 @@ TEMPLATE="/etc/strips/config.js.template"
 TARGET="/usr/share/nginx/html/scripts/config.js"
 
 # Defaults seguros caso alguma env var não esteja definida.
-# - apiBaseUrl cai num caminho relativo razoável (atrás do nginx do host).
+# - apiBaseUrl cai no path relativo do backend no domínio raiz do app.
 # - supabaseUrl/anonKey ficam vazios — frontend trata como "não configurado".
-: "${STIRPS_API_BASE_URL:=/strips/api}"
+: "${STIRPS_API_BASE_URL:=/api}"
 : "${STIRPS_SUPABASE_URL:=}"
 : "${STIRPS_SUPABASE_ANON_KEY:=}"
 export STIRPS_API_BASE_URL STIRPS_SUPABASE_URL STIRPS_SUPABASE_ANON_KEY

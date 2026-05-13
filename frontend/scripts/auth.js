@@ -65,14 +65,18 @@
   let supabaseClient = null;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    state.status = "misconfigured";
-    state.error =
-      "STIRPS_SUPABASE_URL e STIRPS_SUPABASE_ANON_KEY precisam estar definidos em scripts/config.js.";
+    setState({
+      status: "misconfigured",
+      error:
+        "STIRPS_SUPABASE_URL e STIRPS_SUPABASE_ANON_KEY precisam estar definidos em scripts/config.js.",
+    });
     // eslint-disable-next-line no-console
     console.warn("[stirps] auth desabilitado — config Supabase ausente");
   } else if (!window.supabase || typeof window.supabase.createClient !== "function") {
-    state.status = "error";
-    state.error = "Supabase SDK não disponível (window.supabase.createClient ausente).";
+    setState({
+      status: "error",
+      error: "Supabase SDK não disponível (window.supabase.createClient ausente).",
+    });
     // eslint-disable-next-line no-console
     console.error("[stirps] window.supabase.createClient ausente");
   } else {
@@ -86,8 +90,10 @@
       });
       window.supabaseClient = supabaseClient;
     } catch (e) {
-      state.status = "error";
-      state.error = "Falha ao inicializar Supabase: " + (e && e.message ? e.message : String(e));
+      setState({
+        status: "error",
+        error: "Falha ao inicializar Supabase: " + (e && e.message ? e.message : String(e)),
+      });
       // eslint-disable-next-line no-console
       console.error("[stirps] createClient falhou", e);
     }

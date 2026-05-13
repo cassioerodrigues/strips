@@ -77,7 +77,7 @@ As variáveis de ambiente esperadas são:
 
 | Variável                      | Default se ausente | Significado                              |
 |-------------------------------|--------------------|------------------------------------------|
-| `STIRPS_API_BASE_URL`         | `/strips/api`      | Vira `window.STIRPS_CONFIG.apiBaseUrl`.  |
+| `STIRPS_API_BASE_URL`         | `/api`             | Vira `window.STIRPS_CONFIG.apiBaseUrl`.  |
 | `STIRPS_SUPABASE_URL`         | `""`               | Vira `window.STIRPS_CONFIG.supabaseUrl`. |
 | `STIRPS_SUPABASE_ANON_KEY`    | `""`               | Vira `window.STIRPS_CONFIG.supabaseAnonKey`. |
 
@@ -89,7 +89,7 @@ Exemplo de configuração no EasyPanel (aba **Environment** do serviço do
 frontend):
 
 ```env
-STIRPS_API_BASE_URL=https://cassiorodrigues.tech/strips/api
+STIRPS_API_BASE_URL=/api
 STIRPS_SUPABASE_URL=https://abcd1234.supabase.co
 STIRPS_SUPABASE_ANON_KEY=eyJhbGciOiJFUzI1NiIs...   # anon key pública, NUNCA service_role
 ```
@@ -111,7 +111,7 @@ Para subir o container manualmente com overrides:
 cd /srv/strips
 docker build -t stirps-frontend ./frontend
 docker run --rm -p 8080:80 \
-  -e STIRPS_API_BASE_URL=https://cassiorodrigues.tech/strips/api \
+  -e STIRPS_API_BASE_URL=/api \
   -e STIRPS_SUPABASE_URL=https://abcd1234.supabase.co \
   -e STIRPS_SUPABASE_ANON_KEY=eyJhbGciOiJFUzI1NiIs... \
   stirps-frontend

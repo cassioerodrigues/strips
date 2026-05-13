@@ -7,7 +7,7 @@
 //
 // IMPORTANTE: este arquivo é servido publicamente. Coloque AQUI somente
 // valores públicos:
-//   - apiBaseUrl       URL base da API Stirps (ex.: "/strips/api" ou
+//   - apiBaseUrl       URL base da API Stirps (ex.: "/api" ou
 //                      "http://localhost:8001/api")
 //   - supabaseUrl      URL pública do projeto Supabase
 //   - supabaseAnonKey  chave anon (publishable) do Supabase — NUNCA a

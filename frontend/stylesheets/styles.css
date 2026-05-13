@@ -1914,3 +1914,45 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Estados de carregamento / erro / vazio compartilhados pelas páginas
+   migradas para a API real (dashboard / profile / people / timeline). */
+.api-loading {
+  padding: 28px 32px;
+  font-size: 14px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
+}
+.api-loading-shimmer {
+  color: var(--muted-2);
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+.api-error {
+  margin: 12px 32px;
+  padding: 14px 18px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid #a85d3a;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+  font-size: 13px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.api-error .link { color: var(--olive); cursor: pointer; }
+.api-empty {
+  margin: 18px 32px;
+  padding: 28px 24px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.5;
+}
+.api-empty .link { color: var(--olive); cursor: pointer; }

@@ -1,4 +1,7 @@
 // Modal components: EditPersonModal + AddEventModal
+// TODO: migrate when tree auto-layout lands (follow-up). Modais ainda
+// dependem de FAMILY para pré-popular form fields; quando o tree/people
+// migrar de vez, conectar a window.api.fetch via PATCH/POST.
 
 function ModalShell({ open, onClose, children, size = "md", title, subtitle, icon }) {
   React.useEffect(() => {

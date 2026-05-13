@@ -9,6 +9,9 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const auth = window.useAuth ? window.useAuth() : { status: "loading" };
+  // Hook único no topo — usado pelo breadcrumb p/ resolver UUIDs vindos da API.
+  // Em modo FAMILY-only (sem API), retorna status "unavailable" e peopleById vazio.
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", peopleById: {} };
   const t = window.useTweaks ? window.useTweaks(TWEAK_DEFAULTS) : { ...TWEAK_DEFAULTS };
   const [route, setRoute] = React.useState("tree"); // landing on tree per priority
   const [personId, setPersonId] = React.useState("p_giuseppe");
@@ -58,11 +61,27 @@ function App() {
     setRoute("profile");
   }
 
+  // Resolve um person id (UUID da API ou id mock "p_*") consultando primeiro o
+  // snapshot do useTree() e caindo no FAMILY mock como fallback.
+  function lookupPersonName(id) {
+    if (!id) return "Pessoa";
+    const fromApi = tree && tree.peopleById ? tree.peopleById[id] : null;
+    if (fromApi) {
+      const full = [fromApi.first, fromApi.last].filter(Boolean).join(" ").trim();
+      return full || fromApi.displayName || "Pessoa";
+    }
+    const fromFamily = window.FAMILY && window.FAMILY.people ? window.FAMILY.people[id] : null;
+    if (fromFamily) {
+      return `${fromFamily.first || ""} ${fromFamily.last || ""}`.trim() || "Pessoa";
+    }
+    return "Pessoa";
+  }
+
   const breadcrumbs = (() => {
     const map = {
       dashboard: ["Stirps", "Início"],
       tree: ["Stirps", "Árvore genealógica"],
-      profile: ["Stirps", "Pessoas", `${window.FAMILY.people[personId]?.first} ${window.FAMILY.people[personId]?.last}`],
+      profile: ["Stirps", "Pessoas", lookupPersonName(personId)],
       search: ["Stirps", "Pesquisa histórica"],
       documents: ["Stirps", "Documentos"],
       people: ["Stirps", "Pessoas"],

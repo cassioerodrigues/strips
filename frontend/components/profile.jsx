@@ -2,25 +2,79 @@
 
 function Profile({ personId, onBack, onPersonClick }) {
   const F = window.FAMILY;
-  const p = F.people[personId];
+  // usePerson() retorna { status, person, relations, error }. Casos:
+  //   - "fallback"     : personId é mock (p_*) → usa FAMILY direto
+  //   - "unavailable"  : sem API configurada → usa FAMILY direto
+  //   - "loading"/"idle": render skeleton (early return)
+  //   - "ready"        : usa person/relations da API
+  //   - "empty"/"error": render mensagem (early return)
+  const personHook = window.usePerson ? window.usePerson(personId) : { status: "unavailable" };
   const [tab, setTab] = React.useState("bio");
   const [editOpen, setEditOpen] = React.useState(false);
   const [eventOpen, setEventOpen] = React.useState(false);
+
+  const useApi = personHook.status === "ready";
+  const useFamily =
+    personHook.status === "fallback" ||
+    personHook.status === "unavailable" ||
+    (personHook.status === "idle" && (!personId || (typeof personId === "string" && personId.indexOf("p_") === 0)));
+
+  if (personHook.status === "loading" || (personHook.status === "idle" && !useFamily)) {
+    return (
+      <div className="page page-profile">
+        <div className="api-loading">Carregando perfil…</div>
+      </div>
+    );
+  }
+  if (personHook.status === "empty") {
+    return (
+      <div className="page page-profile">
+        <div className="api-empty">
+          Pessoa não encontrada.
+          <button className="link" onClick={onBack}>Voltar</button>
+        </div>
+      </div>
+    );
+  }
+  if (personHook.status === "error") {
+    return (
+      <div className="page page-profile">
+        <div className="api-error" role="alert">
+          Não foi possível carregar este perfil. {personHook.error}
+          <button className="link" onClick={onBack}>Voltar</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Resolve `p` a partir da API (adaptado) ou do FAMILY mock.
+  const p = useApi ? personHook.person : (F.people[personId] || null);
   if (!p) return null;
 
   // Find relations
-  const parents = (p.parents || []).map(id => F.people[id]).filter(Boolean);
-  const spouseUnion = F.unions.find(u => u.partners.includes(p.id));
-  const spouse = spouseUnion ? F.people[spouseUnion.partners.find(x => x !== p.id)] : null;
-  const children = Object.values(F.people).filter(x => (x.parents||[]).includes(p.id));
-  const siblings = Object.values(F.people).filter(x =>
-    x.id !== p.id && x.parents && p.parents &&
-    x.parents.some(pp => p.parents.includes(pp))
-  );
+  let parents, spouse, spouseUnion, children, siblings;
+  if (useApi && personHook.relations) {
+    parents = personHook.relations.parents || [];
+    spouse = (personHook.relations.partners && personHook.relations.partners[0]) || null;
+    spouseUnion = null; // backend não expõe ano/lugar do casamento neste endpoint
+    children = personHook.relations.children || [];
+    siblings = personHook.relations.siblings || [];
+  } else {
+    parents = (p.parents || []).map(id => F.people[id]).filter(Boolean);
+    spouseUnion = F.unions.find(u => u.partners.includes(p.id));
+    spouse = spouseUnion ? F.people[spouseUnion.partners.find(x => x !== p.id)] : null;
+    children = Object.values(F.people).filter(x => (x.parents||[]).includes(p.id));
+    siblings = Object.values(F.people).filter(x =>
+      x.id !== p.id && x.parents && p.parents &&
+      x.parents.some(pp => p.parents.includes(pp))
+    );
+  }
 
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
 
-  const events = buildPersonEvents(p, F);
+  const events = useApi
+    ? buildPersonEventsFromApi(p, children)
+    : buildPersonEvents(p, F);
 
   return (
     <div className="page page-profile">
@@ -87,7 +141,9 @@ function Profile({ personId, onBack, onPersonClick }) {
                 <div><div className="bio-k">Nascimento</div><div className="bio-v">{p.birth?.year} · {p.birth?.place}</div></div>
                 {p.death && <div><div className="bio-k">Falecimento</div><div className="bio-v">{p.death.year} · {p.death.place}</div></div>}
                 <div><div className="bio-k">Ocupação</div><div className="bio-v">{p.occupation}</div></div>
-                <div><div className="bio-k">Geração</div><div className="bio-v">G{p.generation} · {gen_label(p.generation)}</div></div>
+                {p.generation && (
+                  <div><div className="bio-k">Geração</div><div className="bio-v">G{p.generation} · {gen_label(p.generation)}</div></div>
+                )}
               </div>
             </Card>
           )}
@@ -96,7 +152,13 @@ function Profile({ personId, onBack, onPersonClick }) {
             <Card padding={28}>
               <div className="eyebrow">Relacionamentos familiares</div>
               <RelationGroup label="Pais" people={parents} onPersonClick={onPersonClick}/>
-              {spouse && <RelationGroup label={`Cônjuge · desde ${spouseUnion.year}, ${spouseUnion.place}`} people={[spouse]} onPersonClick={onPersonClick}/>}
+              {spouse && (
+                <RelationGroup
+                  label={spouseUnion ? `Cônjuge · desde ${spouseUnion.year}, ${spouseUnion.place}` : "Cônjuge"}
+                  people={[spouse]}
+                  onPersonClick={onPersonClick}
+                />
+              )}
               <RelationGroup label="Irmãos" people={siblings} onPersonClick={onPersonClick}/>
               <RelationGroup label="Filhos" people={children} onPersonClick={onPersonClick}/>
             </Card>
@@ -307,6 +369,20 @@ function buildPersonEvents(p, F) {
   });
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
   events.sort((a,b) => a.year - b.year);
+  return events;
+}
+
+// Sem F.unions na API, montamos só nascimento + filhos + morte.
+function buildPersonEventsFromApi(p, children) {
+  const events = [];
+  if (p.birth?.year) events.push({ year: p.birth.year, title: "Nascimento", place: p.birth.place, color: "#5b6e4f" });
+  (children || []).forEach(c => {
+    if (c.birth?.year) {
+      events.push({ year: c.birth.year, title: `Nascimento de ${c.first}`, place: c.birth.place, color: "#a08658" });
+    }
+  });
+  if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
+  events.sort((a,b) => (a.year||0) - (b.year||0));
   return events;
 }
 

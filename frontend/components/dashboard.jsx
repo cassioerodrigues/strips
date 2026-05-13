@@ -2,12 +2,28 @@
 
 function Dashboard({ onNavigate, onPersonClick }) {
   const F = window.FAMILY;
-  const stats = [
-    { label: "Pessoas", value: Object.keys(F.people).length, delta: "+3 este mês" },
-    { label: "Gerações documentadas", value: 5, delta: "1881 → hoje" },
-    { label: "Países de origem", value: 3, delta: "Itália, Portugal, Brasil" },
-    { label: "Documentos arquivados", value: 47, delta: "+12 esta semana" },
-  ];
+  // useTree() é o snapshot oficial da árvore ativa via API. Quando
+  // status === "ready" usamos stats.*; nos demais estados (loading/empty/
+  // unavailable/error) caímos no agregado do FAMILY mock para manter a UI
+  // viva durante o dev sem backend e durante o spinner inicial.
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", stats: null };
+  const apiReady = tree.status === "ready" && tree.stats;
+  const apiLoading = tree.status === "loading" || tree.status === "idle";
+  const apiError = tree.status === "error";
+
+  const stats = apiReady
+    ? [
+        { label: "Pessoas", value: tree.stats.totalPeople, delta: `${tree.people.length} no acervo` },
+        { label: "Gerações documentadas", value: tree.stats.generations, delta: "via /stats" },
+        { label: "Países de origem", value: tree.stats.countries, delta: "lugares distintos" },
+        { label: "Mídias arquivadas", value: tree.stats.mediaCount, delta: `${tree.stats.unionsCount} uniões` },
+      ]
+    : [
+        { label: "Pessoas", value: Object.keys(F.people).length, delta: "+3 este mês" },
+        { label: "Gerações documentadas", value: 5, delta: "1881 → hoje" },
+        { label: "Países de origem", value: 3, delta: "Itália, Portugal, Brasil" },
+        { label: "Documentos arquivados", value: 47, delta: "+12 esta semana" },
+      ];
 
   return (
     <div className="page page-dashboard">
@@ -33,12 +49,19 @@ function Dashboard({ onNavigate, onPersonClick }) {
       <div className="stat-row">
         {stats.map(s => (
           <div key={s.label} className="stat">
-            <div className="stat-value">{s.value}</div>
+            <div className={"stat-value " + (apiLoading ? "api-loading-shimmer" : "")}>
+              {apiLoading ? "—" : s.value}
+            </div>
             <div className="stat-label">{s.label}</div>
             <div className="stat-delta">{s.delta}</div>
           </div>
         ))}
       </div>
+      {apiError && (
+        <div className="api-error" role="alert">
+          Não foi possível atualizar os contadores agora. <button className="link" onClick={() => window.useTree && window.useTree.refetch && window.useTree.refetch()}>Tentar novamente</button>
+        </div>
+      )}
 
       <div className="dash-grid">
         {/* Recent activity */}

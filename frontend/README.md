@@ -142,6 +142,31 @@ Comunicação com a API:
 - Após login, `auth.js` chama `GET /api/me` uma vez para popular profile e
   trees no estado. Em `401`, o usuário é deslogado.
 
+## Dados
+
+A partir do #25, quatro telas — **Início** (dashboard), **Perfil** (profile),
+**Pessoas** (people list) e **Linha do tempo** (timeline) — consomem dados
+da API real (`/api/trees/{id}/people`, `/api/trees/{id}/stats`,
+`/api/trees/{id}/timeline`, `/api/people/{id}` e `/api/people/{id}/relations`)
+através do hook `window.useTree()` (snapshot agregado da árvore ativa) e do
+hook `window.usePerson(id)` (snapshot de uma pessoa específica), ambos
+definidos em `scripts/tree-data.js`. Adapters em `scripts/adapters.js`
+convertem os DTOs do backend (snake_case + campos achatados como
+`birth_year`/`birth_place`) para o formato "FAMILY-like" esperado pelos
+componentes (`birth.year`, `birth.place`, etc.), evitando reescrever a UI.
+
+A **Árvore genealógica** (`tree.jsx`) continua usando o mock por enquanto:
+o layout atual depende de IDs hard-coded e do campo `generation` (que não
+existe em `PersonOut`); a migração ficou para uma issue de follow-up que
+vai rebuildar o layout com algoritmo automático. Pelo mesmo motivo, o
+`CommandPalette` (Cmd+K), os modais de edição, a tela mobile e
+`SearchPage`/`DocumentsPage` permanecem em `window.FAMILY`.
+
+Quando `STIRPS_CONFIG.apiBaseUrl` está vazio (ou o SDK Supabase não
+carrega), `tree-data.js` reporta `status: "unavailable"` e todas as telas
+caem de volta no mock de `scripts/data.js` — útil para mexer no design
+sem subir o backend.
+
 ## Estrutura
 
 ```
@@ -151,7 +176,9 @@ frontend/
 │   ├── config.js            runtime config (default dev, committado)
 │   ├── auth.js              Supabase client + useAuth() hook (gate full-screen)
 │   ├── api.js               window.api.fetch wrapper (injeta Bearer token)
-│   └── data.js              FAMILY mockada (será trocada pela API depois)
+│   ├── adapters.js          PersonOut/TimelineItem/TreeStatsOut → forma FAMILY-like
+│   ├── tree-data.js         store + window.useTree / window.usePerson
+│   └── data.js              FAMILY mockada (fallback quando API indisponível)
 ├── components/              JSX (app, auth-screen, tree, profile, dashboard, modals, ...)
 ├── stylesheets/             CSS
 ├── config.js.template       fonte para envsubst no boot do container

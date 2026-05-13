@@ -199,13 +199,24 @@ function DocumentsPage() {
 
 function PeoplePage({ onPersonClick }) {
   const F = window.FAMILY;
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState("name");
-  let list = Object.values(F.people);
-  if (q) list = list.filter(p => `${p.first} ${p.last}`.toLowerCase().includes(q.toLowerCase()));
-  if (sort === "name") list.sort((a,b) => a.first.localeCompare(b.first));
+
+  // Fonte: API quando "ready", senão FAMILY mock.
+  const apiList = tree.status === "ready" ? tree.people : null;
+  const familyList = Object.values(F.people);
+  const source = apiList || familyList;
+
+  let list = source.slice();
+  if (q) list = list.filter(p => `${p.first||""} ${p.last||""}`.toLowerCase().includes(q.toLowerCase()));
+  if (sort === "name") list.sort((a,b) => (a.first||"").localeCompare(b.first||""));
   if (sort === "year") list.sort((a,b) => (a.birth?.year||0) - (b.birth?.year||0));
-  if (sort === "gen") list.sort((a,b) => a.generation - b.generation);
+  if (sort === "gen") list.sort((a,b) => (a.generation||0) - (b.generation||0));
+
+  const isLoading = tree.status === "loading" || tree.status === "idle";
+  const isError = tree.status === "error" && (!apiList || apiList.length === 0);
+  const isEmpty = tree.status === "ready" && apiList.length === 0;
 
   return (
     <div className="page page-people">
@@ -227,48 +238,89 @@ function PeoplePage({ onPersonClick }) {
         </div>
       </div>
 
-      <div className="people-grid">
-        {list.map(p => (
-          <button key={p.id} className="person-card" onClick={() => onPersonClick(p.id)}>
-            <Avatar person={p} size={56}/>
-            <div className="person-card-text">
-              <div className="person-card-name">{p.first} {p.last}</div>
-              <div className="person-card-meta">{fmtLifespan(p)}</div>
-              <div className="person-card-occ">{p.occupation}</div>
-            </div>
-            <div className="person-card-gen">G{p.generation}</div>
-          </button>
-        ))}
-      </div>
+      {isLoading && <div className="api-loading">Carregando pessoas…</div>}
+      {isError && (
+        <div className="api-error" role="alert">
+          Não foi possível carregar as pessoas. {tree.error}
+          <button className="link" onClick={() => window.useTree.refetch && window.useTree.refetch()}>Tentar novamente</button>
+        </div>
+      )}
+      {isEmpty && (
+        <div className="api-empty">
+          Ainda não há pessoas nesta árvore. Use o botão <strong>Adicionar pessoa</strong> na barra lateral para começar.
+        </div>
+      )}
+
+      {!isLoading && !isEmpty && (
+        <div className="people-grid">
+          {list.map(p => (
+            <button key={p.id} className="person-card" onClick={() => onPersonClick(p.id)}>
+              <Avatar person={p} size={56}/>
+              <div className="person-card-text">
+                <div className="person-card-name">{p.first} {p.last}</div>
+                <div className="person-card-meta">{fmtLifespan(p)}</div>
+                <div className="person-card-occ">{p.occupation}</div>
+              </div>
+              {p.generation && <div className="person-card-gen">G{p.generation}</div>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function TimelinePage() {
   const F = window.FAMILY;
-  // group by decade
-  const events = [...F.timeline].sort((a,b)=>a.year-b.year);
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", timeline: [] };
+
+  const apiTimeline = tree.status === "ready" ? tree.timeline : null;
+  const sourceTimeline = apiTimeline || F.timeline;
+  const events = [...sourceTimeline].sort((a, b) => (a.year || 0) - (b.year || 0));
+
+  const isLoading = tree.status === "loading" || tree.status === "idle";
+  const isError = tree.status === "error" && (!apiTimeline || apiTimeline.length === 0);
+  const isEmpty = tree.status === "ready" && events.length === 0;
+
+  const firstYear = events.length > 0 ? events[0].year : null;
+  const lastYear = events.length > 0 ? events[events.length - 1].year : null;
+  const span = firstYear && lastYear ? `${firstYear} – ${lastYear} · ${lastYear - firstYear} anos` : "Linha do tempo da família";
+
   return (
     <div className="page page-timeline">
       <div className="people-head">
         <div>
           <div className="eyebrow">Linha do tempo</div>
-          <h1>1881 – 2026 · 145 anos</h1>
+          <h1>{span}</h1>
           <p className="docs-sub">A história da sua família, geração por geração.</p>
         </div>
       </div>
-      <div className="big-timeline">
-        {events.map((e, i) => (
-          <div key={i} className="big-tl-row">
-            <div className="big-tl-year">{e.year}</div>
-            <div className="big-tl-line"><div className="big-tl-dot"/></div>
-            <Card padding={20} className="big-tl-card">
-              <div className="big-tl-title">{e.label}</div>
-              <div className="big-tl-place"><Icon name="pin" size={12}/>{e.place}</div>
-            </Card>
-          </div>
-        ))}
-      </div>
+      {isLoading && <div className="api-loading">Carregando linha do tempo…</div>}
+      {isError && (
+        <div className="api-error" role="alert">
+          Não foi possível carregar a linha do tempo. {tree.error}
+          <button className="link" onClick={() => window.useTree.refetch && window.useTree.refetch()}>Tentar novamente</button>
+        </div>
+      )}
+      {isEmpty && (
+        <div className="api-empty">
+          Nenhum evento ainda. Conforme você adiciona pessoas, casamentos e eventos, eles aparecem aqui.
+        </div>
+      )}
+      {!isLoading && !isEmpty && (
+        <div className="big-timeline">
+          {events.map((e, i) => (
+            <div key={i} className="big-tl-row">
+              <div className="big-tl-year">{e.year}</div>
+              <div className="big-tl-line"><div className="big-tl-dot"/></div>
+              <Card padding={20} className="big-tl-card">
+                <div className="big-tl-title">{e.label}</div>
+                <div className="big-tl-place"><Icon name="pin" size={12}/>{e.place}</div>
+              </Card>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

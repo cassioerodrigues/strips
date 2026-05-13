@@ -1,4 +1,7 @@
 // Family tree page — interactive zoom/pan with rectangular generation cards
+// TODO: migrate when tree auto-layout lands (follow-up). Layout atual depende
+// de IDs hard-coded de FAMILY (p_*) e do campo `generation`, que não existe
+// em PersonOut da API. Issue separada para repensar o layout.
 
 const NODE_W = 220;
 const NODE_H = 86;
@@ -135,8 +138,29 @@ function TreeNode({ p, x, y, focused, dimmed, onClick, onHover }) {
 }
 
 function FamilyTree({ onPersonClick, density = "comfortable" }) {
-  const F = window.FAMILY;
-  const layout = React.useMemo(() => computeLayout(F.rootUserId), []);
+  const F = window.FAMILY || { people: {}, unions: [] };
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
+  const useMockFallback = tree.status === "unavailable";
+  const mockLayout = React.useMemo(
+    () => useMockFallback ? computeLayout(F.rootUserId) : { nodes: {}, links: [] },
+    [useMockFallback],
+  );
+  const apiCanRender =
+    window.treeLayout &&
+    (tree.status === "ready" || tree.status === "error") &&
+    Array.isArray(tree.people) &&
+    tree.people.length > 0;
+  const apiLayout = React.useMemo(() => {
+    if (!apiCanRender) return null;
+    return window.treeLayout.computeApiTreeLayout(
+      tree.people,
+      tree.unions || [],
+      tree.relationsByChild || {},
+    );
+  }, [apiCanRender, tree.people, tree.unions, tree.relationsByChild]);
+  const layout = apiLayout || mockLayout;
+  const peopleById = apiLayout ? (tree.peopleById || {}) : F.people;
+  const focusId = apiLayout ? (tree.people[0] && tree.people[0].id) : "p_helena";
   const [zoom, setZoom] = React.useState(0.85);
   const [pan, setPan] = React.useState({ x: 60, y: 40 });
   const [hover, setHover] = React.useState(null);
@@ -149,7 +173,9 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   React.useEffect(() => {
     const c = containerRef.current;
     if (!c) return;
-    const bounds = Object.values(layout.nodes).reduce((acc, n) => ({
+    const nodes = Object.values(layout.nodes);
+    if (nodes.length === 0) return;
+    const bounds = nodes.reduce((acc, n) => ({
       minX: Math.min(acc.minX, n.x), maxX: Math.max(acc.maxX, n.x + NODE_W),
       minY: Math.min(acc.minY, n.y), maxY: Math.max(acc.maxY, n.y + NODE_H),
     }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
@@ -197,7 +223,9 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
 
   function fitView() {
     const c = containerRef.current;
-    const bounds = Object.values(layout.nodes).reduce((acc, n) => ({
+    const nodes = Object.values(layout.nodes);
+    if (!c || nodes.length === 0) return;
+    const bounds = nodes.reduce((acc, n) => ({
       minX: Math.min(acc.minX, n.x), maxX: Math.max(acc.maxX, n.x + NODE_W),
       minY: Math.min(acc.minY, n.y), maxY: Math.max(acc.maxY, n.y + NODE_H),
     }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
@@ -224,13 +252,17 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
     return set;
   }
   const helena = F.people.p_helena;
-  const paternalSet = React.useMemo(() => ancestry(helena.parents[0]), []);
+  const paternalSet = React.useMemo(
+    () => useMockFallback && helena ? ancestry(helena.parents[0]) : new Set(),
+    [useMockFallback],
+  );
   const maternalSet = React.useMemo(() => {
+    if (!useMockFallback) return new Set();
     // Clarice parents not modeled — just include herself
     const s = new Set();
     s.add("p_clarice");
     return s;
-  }, []);
+  }, [useMockFallback]);
 
   function isDimmed(id) {
     if (!highlightLineage) return false;
@@ -238,6 +270,10 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
     if (highlightLineage === "maternal") return !maternalSet.has(id) && id !== "p_helena";
     return false;
   }
+
+  const apiLoading = tree.status === "loading" || tree.status === "idle";
+  const apiEmpty = tree.status === "empty" || (tree.status === "ready" && Array.isArray(tree.people) && tree.people.length === 0);
+  const apiError = tree.status === "error";
 
   return (
     <div className="page page-tree">
@@ -253,8 +289,23 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
         </div>
       </div>
 
+      {!useMockFallback && apiLoading && (
+        <div className="api-loading">Carregando árvore…</div>
+      )}
+      {!useMockFallback && apiEmpty && (
+        <div className="api-empty">
+          Esta árvore ainda não tem pessoas cadastradas.
+        </div>
+      )}
+      {!useMockFallback && apiError && (
+        <div className="api-error" role="alert">
+          Não foi possível carregar a árvore completa. {tree.error}
+          <button className="link" onClick={() => window.useTree.refetch && window.useTree.refetch()}>Tentar novamente</button>
+        </div>
+      )}
+
       {/* Canvas */}
-      <div
+      {(useMockFallback || apiCanRender) && <div
         ref={containerRef}
         className="tree-canvas"
         onWheel={onWheel}
@@ -302,14 +353,14 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
             })}
           </svg>
           {/* nodes */}
-          {Object.values(layout.nodes).map(n => (
+          {Object.values(layout.nodes).filter(n => peopleById[n.id]).map(n => (
             <TreeNode
               key={n.id}
-              p={F.people[n.id]}
+              p={peopleById[n.id]}
               x={n.x}
               y={n.y}
-              focused={n.id === "p_helena"}
-              dimmed={isDimmed(n.id)}
+              focused={n.id === focusId}
+              dimmed={!apiLayout && isDimmed(n.id)}
               onClick={onPersonClick}
               onHover={setHover}
             />
@@ -333,8 +384,8 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
         </div>
 
         {/* Hover preview */}
-        {hover && <HoverCard person={F.people[hover]}/>}
-      </div>
+        {hover && peopleById[hover] && <HoverCard person={peopleById[hover]}/>}
+      </div>}
     </div>
   );
 }

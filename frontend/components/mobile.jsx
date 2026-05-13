@@ -1,4 +1,6 @@
 // Mobile companion — 2 key screens shown side by side in iOS frames
+// TODO: migrate when tree auto-layout lands (follow-up). Mockup ainda
+// consome FAMILY direto; será migrado junto com o tree principal.
 
 function MobileShowcase({ onClose }) {
   return (

@@ -2,6 +2,7 @@
 
 function Profile({ personId, onBack, onPersonClick }) {
   const F = window.FAMILY;
+  const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [], canEdit: false };
   // usePerson() retorna { status, person, relations, error }. Casos:
   //   - "fallback"     : personId é mock (p_*) → usa FAMILY direto
   //   - "unavailable"  : sem API configurada → usa FAMILY direto
@@ -12,6 +13,7 @@ function Profile({ personId, onBack, onPersonClick }) {
   const [tab, setTab] = React.useState("bio");
   const [editOpen, setEditOpen] = React.useState(false);
   const [eventOpen, setEventOpen] = React.useState(false);
+  const [mutation, setMutation] = React.useState({ saving: false, error: null });
 
   const useApi = personHook.status === "ready";
   const useFamily =
@@ -56,7 +58,12 @@ function Profile({ personId, onBack, onPersonClick }) {
   if (useApi && personHook.relations) {
     parents = personHook.relations.parents || [];
     spouse = (personHook.relations.partners && personHook.relations.partners[0]) || null;
-    spouseUnion = null; // backend não expõe ano/lugar do casamento neste endpoint
+    spouseUnion = spouse
+      ? (tree.unions || []).find(u =>
+          (u.partner_a_id === p.id && u.partner_b_id === spouse.id) ||
+          (u.partner_b_id === p.id && u.partner_a_id === spouse.id)
+        )
+      : null;
     children = personHook.relations.children || [];
     siblings = personHook.relations.siblings || [];
   } else {
@@ -73,8 +80,73 @@ function Profile({ personId, onBack, onPersonClick }) {
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
 
   const events = useApi
-    ? buildPersonEventsFromApi(p, children)
+    ? buildPersonEventsFromApi(p, children, personHook.events || [])
     : buildPersonEvents(p, F);
+  const canEdit = useApi ? !!tree.canEdit : true;
+  const readOnlyReason = tree.role === "viewer"
+    ? "Visualizadores não podem editar esta árvore."
+    : "Somente leitura.";
+
+  function friendlyError(e) {
+    if (e && e.status === 403) return "Você não tem permissão para alterar esta árvore.";
+    if (e && e.status === 422) return "Alguns campos não foram aceitos pela API. Revise os dados e tente novamente.";
+    return (e && e.message) || "Não foi possível salvar a alteração.";
+  }
+
+  async function runMutation(fn) {
+    setMutation({ saving: true, error: null });
+    try {
+      await fn();
+      setMutation({ saving: false, error: null });
+    } catch (e) {
+      setMutation({ saving: false, error: friendlyError(e) });
+      throw e;
+    }
+  }
+
+  function savePerson(form) {
+    return runMutation(() => window.useTree.actions.updatePerson(p.id, form));
+  }
+
+  function deletePerson() {
+    return runMutation(() => window.useTree.actions.deletePerson(p.id)).then(onBack);
+  }
+
+  function saveEvent(form) {
+    return runMutation(() => window.useTree.actions.addEvent(p.id, form));
+  }
+
+  function deleteEvent(eventId) {
+    if (!window.confirm("Remover este evento da linha do tempo?")) return;
+    return runMutation(() => window.useTree.actions.deleteEvent(p.id, eventId));
+  }
+
+  function removeParentLink(parentId) {
+    if (!window.confirm("Remover este vínculo de filiação?")) return;
+    return runMutation(() => window.useTree.actions.removeParent(p.id, parentId));
+  }
+
+  function editEvent(event) {
+    const title = window.prompt("Título do evento", event.title || "");
+    if (title == null) return;
+    return runMutation(() => window.useTree.actions.updateEvent(p.id, event.id, {
+      type: event.type || "custom",
+      title: title,
+      year: event.year || "",
+      place: event.place || "",
+      description: event.note || "",
+    }));
+  }
+
+  function toggleUnionStatus(union) {
+    const nextStatus = union.status === "ongoing" ? "ended" : "ongoing";
+    return runMutation(() => window.useTree.actions.updateUnion(p.id, union.id, { status: nextStatus }));
+  }
+
+  function deleteUnion(union) {
+    if (!window.confirm("Remover esta união da árvore?")) return;
+    return runMutation(() => window.useTree.actions.deleteUnion(p.id, union.id));
+  }
 
   return (
     <div className="page page-profile">
@@ -88,7 +160,7 @@ function Profile({ personId, onBack, onPersonClick }) {
       <div className="profile-head">
         <div className="profile-avatar-wrap">
           <Avatar person={p} size={132}/>
-          <button className="profile-photo-edit"><Icon name="edit" size={14}/></button>
+          {canEdit && <button className="profile-photo-edit"><Icon name="edit" size={14}/></button>}
         </div>
         <div className="profile-titles">
           <div className="profile-eyebrow">
@@ -104,10 +176,30 @@ function Profile({ personId, onBack, onPersonClick }) {
         </div>
         <div className="profile-actions">
           <button className="btn btn-ghost"><Icon name="share" size={14}/>Compartilhar</button>
-          <button className="btn btn-ghost" onClick={() => setEditOpen(true)}><Icon name="edit" size={14}/>Editar</button>
-          <button className="btn btn-primary" onClick={() => setEventOpen(true)}><Icon name="plus" size={14}/>Adicionar evento</button>
-          {window.EditPersonModal && <window.EditPersonModal open={editOpen} person={p} onClose={() => setEditOpen(false)}/>}
-          {window.AddEventModal && <window.AddEventModal open={eventOpen} person={p} onClose={() => setEventOpen(false)}/>}
+          {canEdit && <button className="btn btn-ghost" onClick={() => setEditOpen(true)}><Icon name="edit" size={14}/>Editar</button>}
+          {canEdit && <button className="btn btn-primary" onClick={() => setEventOpen(true)}><Icon name="plus" size={14}/>Adicionar evento</button>}
+          {window.EditPersonModal && <window.EditPersonModal
+            open={editOpen}
+            person={p}
+            onClose={() => setEditOpen(false)}
+            onSave={savePerson}
+            onDelete={deletePerson}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
+          {window.AddEventModal && <window.AddEventModal
+            open={eventOpen}
+            person={p}
+            people={useApi ? tree.people : Object.values(F.people)}
+            onClose={() => setEventOpen(false)}
+            onSave={saveEvent}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
         </div>
       </div>
 
@@ -151,13 +243,36 @@ function Profile({ personId, onBack, onPersonClick }) {
           {tab === "family" && (
             <Card padding={28}>
               <div className="eyebrow">Relacionamentos familiares</div>
-              <RelationGroup label="Pais" people={parents} onPersonClick={onPersonClick}/>
+              <RelationGroup
+                label="Pais"
+                people={parents}
+                onPersonClick={onPersonClick}
+                action={canEdit ? parent => (
+                  <button className="link" onClick={(e) => { e.stopPropagation(); removeParentLink(parent.id); }}>
+                    Remover vínculo
+                  </button>
+                ) : null}
+              />
               {spouse && (
-                <RelationGroup
-                  label={spouseUnion ? `Cônjuge · desde ${spouseUnion.year}, ${spouseUnion.place}` : "Cônjuge"}
-                  people={[spouse]}
-                  onPersonClick={onPersonClick}
-                />
+                <>
+                  <RelationGroup
+                    label={spouseUnion
+                      ? `Cônjuge · ${spouseUnion.start_year || "sem data"}${spouseUnion.start_place ? ", " + spouseUnion.start_place : ""}`
+                      : "Cônjuge"}
+                    people={[spouse]}
+                    onPersonClick={onPersonClick}
+                  />
+                  {canEdit && spouseUnion && (
+                    <div className="meta-row" style={{marginTop: 8}}>
+                      <button className="btn btn-sm btn-ghost" onClick={() => toggleUnionStatus(spouseUnion)} disabled={mutation.saving}>
+                        <Icon name="edit" size={13}/>{spouseUnion.status === "ongoing" ? "Marcar encerrada" : "Marcar ativa"}
+                      </button>
+                      <button className="btn btn-sm btn-ghost btn-danger-soft" onClick={() => deleteUnion(spouseUnion)} disabled={mutation.saving}>
+                        <Icon name="trash" size={13}/>Remover união
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
               <RelationGroup label="Irmãos" people={siblings} onPersonClick={onPersonClick}/>
               <RelationGroup label="Filhos" people={children} onPersonClick={onPersonClick}/>
@@ -178,6 +293,12 @@ function Profile({ personId, onBack, onPersonClick }) {
                       <div className="ptl-title">{e.title}</div>
                       <div className="ptl-place">{e.place}</div>
                       {e.note && <div className="ptl-note">{e.note}</div>}
+                      {canEdit && e.id && (
+                        <div className="meta-row" style={{marginTop: 8}}>
+                          <button className="link" onClick={() => editEvent(e)}>Editar evento</button>
+                          <button className="link" onClick={() => deleteEvent(e.id)}>Remover evento</button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -332,21 +453,29 @@ function Profile({ personId, onBack, onPersonClick }) {
   );
 }
 
-function RelationGroup({ label, people, onPersonClick }) {
+function RelationGroup({ label, people, onPersonClick, action = null }) {
   if (!people || people.length === 0) return null;
   return (
     <div className="rel-group">
       <div className="rel-label">{label}</div>
       <div className="rel-list">
         {people.map(p => (
-          <button key={p.id} className="rel-card" onClick={() => onPersonClick(p.id)}>
+          <div
+            key={p.id}
+            className="rel-card"
+            role="button"
+            tabIndex={0}
+            onClick={() => onPersonClick(p.id)}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onPersonClick(p.id); }}
+          >
             <Avatar person={p} size={44}/>
             <div className="rel-text">
               <div className="rel-name">{p.first} {p.last}</div>
               <div className="rel-meta">{fmtLifespan(p)} · {p.occupation}</div>
+              {action && action(p)}
             </div>
             <Icon name="chev-right" size={14}/>
-          </button>
+          </div>
         ))}
       </div>
     </div>
@@ -372,9 +501,17 @@ function buildPersonEvents(p, F) {
   return events;
 }
 
-// Sem F.unions na API, montamos só nascimento + filhos + morte.
-function buildPersonEventsFromApi(p, children) {
-  const events = [];
+// Eventos da API entram junto com nascimento + filhos + morte derivados.
+function buildPersonEventsFromApi(p, children, apiEvents) {
+  const events = (apiEvents || []).map(e => ({
+    id: e.id,
+    type: e.type,
+    year: e.year,
+    title: e.title,
+    place: e.place,
+    color: "#3a5b6b",
+    note: e.description,
+  }));
   if (p.birth?.year) events.push({ year: p.birth.year, title: "Nascimento", place: p.birth.place, color: "#5b6e4f" });
   (children || []).forEach(c => {
     if (c.birth?.year) {

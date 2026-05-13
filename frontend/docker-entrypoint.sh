@@ -1,0 +1,29 @@
+#!/bin/sh
+# Renderiza /usr/share/nginx/html/scripts/config.js a partir do template
+# /etc/strips/config.js.template no boot do container, expandindo APENAS
+# as três variáveis públicas conhecidas. Depois faz exec do nginx para
+# manter o PID 1.
+set -eu
+
+TEMPLATE="/etc/strips/config.js.template"
+TARGET="/usr/share/nginx/html/scripts/config.js"
+
+# Defaults seguros caso alguma env var não esteja definida.
+# - apiBaseUrl cai num caminho relativo razoável (atrás do nginx do host).
+# - supabaseUrl/anonKey ficam vazios — frontend trata como "não configurado".
+: "${STIRPS_API_BASE_URL:=/strips/api}"
+: "${STIRPS_SUPABASE_URL:=}"
+: "${STIRPS_SUPABASE_ANON_KEY:=}"
+export STIRPS_API_BASE_URL STIRPS_SUPABASE_URL STIRPS_SUPABASE_ANON_KEY
+
+if [ -f "$TEMPLATE" ]; then
+  # Lista explícita de variáveis: envsubst só toca nestes três placeholders,
+  # qualquer outro "$..." no arquivo passa intacto.
+  envsubst '${STIRPS_API_BASE_URL} ${STIRPS_SUPABASE_URL} ${STIRPS_SUPABASE_ANON_KEY}' \
+    < "$TEMPLATE" > "$TARGET"
+  echo "[entrypoint] runtime config escrita em $TARGET"
+else
+  echo "[entrypoint] aviso: template $TEMPLATE ausente; mantendo $TARGET committado" >&2
+fi
+
+exec nginx -g 'daemon off;'

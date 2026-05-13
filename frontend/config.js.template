@@ -1,0 +1,16 @@
+// Runtime config do frontend Stirps — TEMPLATE.
+//
+// Este arquivo é a fonte que o entrypoint do container expande via envsubst
+// no boot. Os placeholders ${...} abaixo são substituídos pelos valores das
+// variáveis de ambiente correspondentes; o resultado é gravado em
+// /usr/share/nginx/html/scripts/config.js antes do nginx subir.
+//
+// Apenas estes três placeholders são reconhecidos (envsubst é chamado com
+// lista explícita para não tocar em qualquer outro $ que apareça no JS).
+//
+// NUNCA coloque a service-role key do Supabase aqui — somente a anon key.
+window.STIRPS_CONFIG = {
+  apiBaseUrl: "${STIRPS_API_BASE_URL}",
+  supabaseUrl: "${STIRPS_SUPABASE_URL}",
+  supabaseAnonKey: "${STIRPS_SUPABASE_ANON_KEY}"
+};

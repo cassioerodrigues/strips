@@ -8,6 +8,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 function App() {
+  const auth = window.useAuth ? window.useAuth() : { status: "loading" };
   const t = window.useTweaks ? window.useTweaks(TWEAK_DEFAULTS) : { ...TWEAK_DEFAULTS };
   const [route, setRoute] = React.useState("tree"); // landing on tree per priority
   const [personId, setPersonId] = React.useState("p_giuseppe");
@@ -32,6 +33,16 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Auth gate — antes do shell. AuthScreen e AuthLoading vêm de auth-screen.jsx.
+  const AuthLoadingC = window.AuthLoading;
+  const AuthScreenC = window.AuthScreen;
+  if (auth.status === "loading") {
+    return AuthLoadingC ? <AuthLoadingC/> : null;
+  }
+  if (auth.status === "misconfigured" || auth.status === "unauthenticated" || auth.status === "error") {
+    return AuthScreenC ? <AuthScreenC/> : null;
+  }
 
   function navigate(r) {
     if (r === "settings" || r === "help") {
@@ -69,9 +80,23 @@ function App() {
           breadcrumbs={breadcrumbs}
           onSearchOpen={() => setCmdkOpen(true)}
           rightSlot={
-            <button className="btn btn-ghost btn-sm" onClick={() => setRoute("mobile")}>
-              <Icon name="globe" size={14}/>Mobile
-            </button>
+            <React.Fragment>
+              <button className="btn btn-ghost btn-sm" onClick={() => setRoute("mobile")}>
+                <Icon name="globe" size={14}/>Mobile
+              </button>
+              {auth.profile?.display_name && (
+                <span className="topbar-user" title={auth.profile.display_name}>
+                  {auth.profile.display_name}
+                </span>
+              )}
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => auth.signOut && auth.signOut()}
+                title="Encerrar sessão"
+              >
+                Sair
+              </button>
+            </React.Fragment>
           }
         />
         {route === "dashboard" && <Dashboard onNavigate={navigate} onPersonClick={openPerson}/>}

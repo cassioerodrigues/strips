@@ -118,6 +118,30 @@ docker run --rm -p 8080:80 \
 # acesse http://127.0.0.1:8080/scripts/config.js para conferir o resultado
 ```
 
+## Autenticação
+
+O frontend implementa um **gate full-screen** de autenticação via Supabase
+(`scripts/auth.js` + `components/auth-screen.jsx`). Sem `STIRPS_SUPABASE_URL`
+e `STIRPS_SUPABASE_ANON_KEY` configurados, o app renderiza uma tela de
+"configuração necessária" no lugar do shell — nenhum dado é exibido.
+
+Fluxo mínimo:
+
+- Login e signup por **email + senha** (sem MFA, sem reset, sem social login).
+- A sessão é persistida pelo próprio SDK (`persistSession: true`) em
+  `localStorage`, então sobrevive a reloads.
+- Dependendo das configurações do projeto Supabase, o signup pode exigir
+  **confirmação por email** — a tela mostra "Verifique seu email" nesse caso.
+- O botão **Sair** no topbar limpa a sessão e volta para o gate.
+
+Comunicação com a API:
+
+- `scripts/api.js` expõe `window.api.fetch(path, options)` e injeta
+  automaticamente `Authorization: Bearer <access_token>` em toda chamada,
+  lendo o token via `window.supabaseClient.auth.getSession()`.
+- Após login, `auth.js` chama `GET /api/me` uma vez para popular profile e
+  trees no estado. Em `401`, o usuário é deslogado.
+
 ## Estrutura
 
 ```
@@ -125,8 +149,10 @@ frontend/
 ├── Stirps.html              entry point (carrega config.js → React → JSX)
 ├── scripts/
 │   ├── config.js            runtime config (default dev, committado)
+│   ├── auth.js              Supabase client + useAuth() hook (gate full-screen)
+│   ├── api.js               window.api.fetch wrapper (injeta Bearer token)
 │   └── data.js              FAMILY mockada (será trocada pela API depois)
-├── components/              JSX (app, tree, profile, dashboard, modals, ...)
+├── components/              JSX (app, auth-screen, tree, profile, dashboard, modals, ...)
 ├── stylesheets/             CSS
 ├── config.js.template       fonte para envsubst no boot do container
 ├── docker-entrypoint.sh     renderiza config.js e dá exec no nginx

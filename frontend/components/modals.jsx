@@ -1,7 +1,4 @@
 // Modal components: EditPersonModal + AddEventModal
-// TODO: migrate when tree auto-layout lands (follow-up). Modais ainda
-// dependem de FAMILY para pré-popular form fields; quando o tree/people
-// migrar de vez, conectar a window.api.fetch via PATCH/POST.
 
 function ModalShell({ open, onClose, children, size = "md", title, subtitle, icon }) {
   React.useEffect(() => {
@@ -79,6 +76,52 @@ function SelectInput({ value, onChange, options }) {
         {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
       <Icon name="chev-down" size={14}/>
+    </div>
+  );
+}
+
+function PartialDate({ value, onChange, placeholderYear = "Ano" }) {
+  // value: { day, month, year, precision, approx, unknown }
+  const v = value || {};
+  const precision = v.precision || (v.day ? "full" : v.month ? "month-year" : v.year ? "year" : "full");
+  const set = (patch) => onChange({ ...v, ...patch });
+  const setPrecision = (p) => {
+    const next = { ...v, precision: p };
+    if (p === "year") { next.day = ""; next.month = ""; }
+    if (p === "month-year") { next.day = ""; }
+    if (p === "unknown") { next.day = ""; next.month = ""; next.year = ""; next.approx = false; }
+    onChange(next);
+  };
+  const months = [["", "Mês"], ...["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i) => [String(i+1), m])];
+  return (
+    <div className="partial-date">
+      <div className="partial-date-prec">
+        <button type="button" className={"prec-chip " + (precision === "full" ? "prec-chip-on" : "")} onClick={() => setPrecision("full")}>Dia/mês/ano</button>
+        <button type="button" className={"prec-chip " + (precision === "month-year" ? "prec-chip-on" : "")} onClick={() => setPrecision("month-year")}>Só mês/ano</button>
+        <button type="button" className={"prec-chip " + (precision === "year" ? "prec-chip-on" : "")} onClick={() => setPrecision("year")}>Só ano</button>
+        <button type="button" className={"prec-chip " + (precision === "unknown" ? "prec-chip-on" : "")} onClick={() => setPrecision("unknown")}>Desconhecida</button>
+      </div>
+      {precision !== "unknown" && (
+        <div className={"partial-date-row " + ("prec-" + precision)}>
+          {precision === "full" && (
+            <input className="input input-sm" placeholder="Dia" maxLength={2} value={v.day || ""} onChange={e => set({ day: e.target.value })}/>
+          )}
+          {(precision === "full" || precision === "month-year") && (
+            <SelectInput value={v.month || ""} onChange={x => set({ month: x })} options={months}/>
+          )}
+          <input className="input input-sm" placeholder={placeholderYear} maxLength={4} value={v.year || ""} onChange={e => set({ year: e.target.value })}/>
+          <label className="approx-toggle">
+            <input type="checkbox" checked={!!v.approx} onChange={e => set({ approx: e.target.checked })}/>
+            <span>aproximadamente</span>
+          </label>
+        </div>
+      )}
+      {precision === "unknown" && (
+        <div className="partial-date-unknown">
+          <Icon name="sparkle" size={13}/>
+          Será exibido como <em>"data desconhecida"</em> na linha do tempo.
+        </div>
+      )}
     </div>
   );
 }
@@ -199,7 +242,7 @@ function EditPersonModal({ open, person, onClose, onSave }) {
           ["identity", "Identidade", "user"],
           ["life", "Vida", "calendar"],
           ["bio", "Biografia", "book"],
-          ["meta", "Metadados", "settings"],
+          ["meta", "Fontes", "book"],
         ].map(([id, label, ic]) => (
           <button
             key={id}
@@ -255,16 +298,17 @@ function EditPersonModal({ open, person, onClose, onSave }) {
 
         {tab === "life" && (
           <div className="form-grid">
-            <Field label="Nascimento" span={4}>
-              <div className="date-row">
-                <input className="input input-sm" placeholder="Dia" value={form.birthDay} onChange={e => set("birthDay", e.target.value)}/>
-                <SelectInput
-                  value={form.birthMonth}
-                  onChange={v => set("birthMonth", v)}
-                  options={[["", "Mês"], ...["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i) => [String(i+1), m])]}
-                />
-                <input className="input input-sm" placeholder="Ano" value={form.birthYear} onChange={e => set("birthYear", e.target.value)}/>
-              </div>
+            <Field label="Nascimento" span={4} hint="se não souber a data exata, pode marcar aproximada ou desconhecida">
+              <PartialDate
+                value={{
+                  day: form.birthDay, month: form.birthMonth, year: form.birthYear,
+                  precision: form.birthPrecision, approx: form.birthApprox,
+                }}
+                onChange={d => setForm(f => ({ ...f,
+                  birthDay: d.day || "", birthMonth: d.month || "", birthYear: d.year || "",
+                  birthPrecision: d.precision, birthApprox: d.approx,
+                }))}
+              />
             </Field>
             <Field label="Cidade de nascimento" span={2}>
               <TextInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Treviso"/>
@@ -284,13 +328,22 @@ function EditPersonModal({ open, person, onClose, onSave }) {
             </Field>
             {!form.living && (
               <>
-                <Field label="Ano do falecimento" span={2}>
-                  <TextInput value={form.deathYear} onChange={v => set("deathYear", v)} placeholder="1972"/>
+                <Field label="Data do falecimento" span={4} hint="precisão flexível">
+                  <PartialDate
+                    value={{
+                      day: form.deathDay, month: form.deathMonth, year: form.deathYear,
+                      precision: form.deathPrecision, approx: form.deathApprox,
+                    }}
+                    onChange={d => setForm(f => ({ ...f,
+                      deathDay: d.day || "", deathMonth: d.month || "", deathYear: d.year || "",
+                      deathPrecision: d.precision, deathApprox: d.approx,
+                    }))}
+                  />
                 </Field>
                 <Field label="Local" span={2}>
                   <TextInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder="Caxias do Sul, RS"/>
                 </Field>
-                <Field label="Causa" span={4} hint="opcional, mantido privado">
+                <Field label="Causa" span={2} hint="opcional">
                   <TextInput value={form.cause} onChange={v => set("cause", v)} placeholder=""/>
                 </Field>
               </>
@@ -324,16 +377,9 @@ function EditPersonModal({ open, person, onClose, onSave }) {
 
         {tab === "meta" && (
           <div className="form-grid">
-            <Field label="Visibilidade do perfil" span={4} hint="quem pode ver os dados desta pessoa">
-              <SegmentedRadio
-                value={form.privacy}
-                onChange={v => set("privacy", v)}
-                options={[["family", "Família"], ["close", "Próximos"], ["private", "Privado"]]}
-              />
-            </Field>
             <Field label="Fontes e referências" span={4} hint="cartórios, livros, entrevistas">
               <TextArea
-                rows={5}
+                rows={6}
                 value={form.sources}
                 onChange={v => set("sources", v)}
                 placeholder={"• Certidão de nascimento, Cartório de Caxias, livro 14, fls. 22\n• Entrevista com Maria Bertolini, jul/2024"}
@@ -392,12 +438,14 @@ function AddEventModal({ open, person, onClose, onSave }) {
     month: "",
     day: "",
     approx: false,
+    precision: "full",
     place: "",
     country: "",
     description: "",
     relatedPeople: [],
+    marriageWith: "",
+    otherParent: "",
     sources: "",
-    privacy: "family",
     attachments: [],
   });
 
@@ -411,12 +459,14 @@ function AddEventModal({ open, person, onClose, onSave }) {
         month: "",
         day: "",
         approx: false,
+        precision: "full",
         place: "",
         country: "",
         description: "",
         relatedPeople: [],
+        marriageWith: "",
+        otherParent: "",
         sources: "",
-        privacy: "family",
         attachments: [],
       });
     }
@@ -424,9 +474,7 @@ function AddEventModal({ open, person, onClose, onSave }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const canAdvance = step === 1 ? !!form.type :
-    step === 2 ? (form.year || form.title) :
-    true;
+  const canAdvance = step === 1 ? !!form.type : true;
 
   function save() {
     onSave?.(form);
@@ -441,7 +489,7 @@ function AddEventModal({ open, person, onClose, onSave }) {
   }
 
   const F = window.FAMILY;
-  const candidates = person ? Object.values(F.people).filter(x => x.id !== person.id).slice(0, 8) : [];
+  const candidates = person ? Object.values(F.people).filter(x => x.id !== person.id) : [];
   const eventDef = EVENT_TYPES.find(e => e.id === form.type);
 
   return (
@@ -499,20 +547,17 @@ function AddEventModal({ open, person, onClose, onSave }) {
 
         {step === 2 && (
           <div className="form-grid">
-            <Field label="Data" span={4} hint="ano é obrigatório, dia/mês opcional">
-              <div className="date-row">
-                <input className="input input-sm" placeholder="Dia" value={form.day} onChange={e => set("day", e.target.value)}/>
-                <SelectInput
-                  value={form.month}
-                  onChange={v => set("month", v)}
-                  options={[["", "Mês"], ...["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i) => [String(i+1), m])]}
-                />
-                <input className="input input-sm" placeholder="Ano" value={form.year} onChange={e => set("year", e.target.value)}/>
-              </div>
-              <label className="check-row">
-                <input type="checkbox" checked={form.approx} onChange={e => set("approx", e.target.checked)}/>
-                <span>Data aproximada — registrar como "por volta de"</span>
-              </label>
+            <Field label="Data do evento" span={4} hint="precisão flexível">
+              <PartialDate
+                value={{
+                  day: form.day, month: form.month, year: form.year,
+                  precision: form.precision, approx: form.approx,
+                }}
+                onChange={d => setForm(f => ({ ...f,
+                  day: d.day || "", month: d.month || "", year: d.year || "",
+                  precision: d.precision, approx: d.approx,
+                }))}
+              />
             </Field>
             <Field label="Cidade / local" span={2}>
               <TextInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul"/>
@@ -521,8 +566,83 @@ function AddEventModal({ open, person, onClose, onSave }) {
               <TextInput value={form.country} onChange={v => set("country", v)} placeholder="Brasil"/>
             </Field>
 
-            {candidates.length > 0 && (
-              <Field label="Outras pessoas envolvidas" span={4} hint="opcional">
+            {form.type === "marriage" && (
+              <Field label="Casamento entre" span={4} required hint="selecione o(a) cônjuge — o outro lado da união">
+                <div className="pair-picker">
+                  <div className="pair-side">
+                    <Avatar person={person} size={48}/>
+                    <div className="pair-name">{person?.first} {person?.last}</div>
+                    <div className="pair-meta">{person?.birth?.year}{person?.death ? `–${person.death.year}` : ""}</div>
+                  </div>
+                  <div className="pair-link">
+                    <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+                      <line x1="0" y1="7" x2="11" y2="7" stroke="#a08658" strokeWidth="1.6"/>
+                      <line x1="21" y1="7" x2="32" y2="7" stroke="#a08658" strokeWidth="1.6"/>
+                      <circle cx="13.5" cy="7" r="3.6" stroke="#a08658" strokeWidth="1.4" fill="none"/>
+                      <circle cx="18.5" cy="7" r="3.6" stroke="#a08658" strokeWidth="1.4" fill="none"/>
+                    </svg>
+                  </div>
+                  <div className="pair-side pair-side-pick">
+                    {form.marriageWith ? (
+                      <>
+                        <Avatar person={F.people[form.marriageWith]} size={48}/>
+                        <div className="pair-name">{F.people[form.marriageWith].first} {F.people[form.marriageWith].last}</div>
+                        <div className="pair-meta">{F.people[form.marriageWith].birth?.year}{F.people[form.marriageWith].death ? `–${F.people[form.marriageWith].death.year}` : ""}</div>
+                        <button type="button" className="pair-clear" onClick={() => set("marriageWith", "")}>Trocar</button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="pair-placeholder">
+                          <Icon name="user" size={22}/>
+                        </div>
+                        <div className="pair-name pair-name-empty">Selecione o cônjuge</div>
+                        <div className="pair-meta">já na árvore ou criar novo</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto", marginTop: 12}}>
+                  {candidates.map(c => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      className={"person-chip " + (form.marriageWith === c.id ? "person-chip-on" : "")}
+                      onClick={() => set("marriageWith", form.marriageWith === c.id ? "" : c.id)}
+                    >
+                      <Avatar person={c} size={22}/>
+                      <span>{c.first} {c.last}</span>
+                      {form.marriageWith === c.id && <Icon name="check" size={12}/>}
+                    </button>
+                  ))}
+                  <button type="button" className="person-chip person-chip-new">
+                    <span className="person-chip-plus"><Icon name="plus" size={12}/></span>
+                    <span>Criar nova pessoa</span>
+                  </button>
+                </div>
+              </Field>
+            )}
+
+            {form.type === "child" && (
+              <Field label="Outro pai/mãe" span={4} hint="quem é o(a) outro(a) progenitor(a)?">
+                <div className="people-picker">
+                  {candidates.map(c => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      className={"person-chip " + (form.otherParent === c.id ? "person-chip-on" : "")}
+                      onClick={() => set("otherParent", form.otherParent === c.id ? "" : c.id)}
+                    >
+                      <Avatar person={c} size={22}/>
+                      <span>{c.first} {c.last}</span>
+                      {form.otherParent === c.id && <Icon name="check" size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+
+            {form.type !== "marriage" && form.type !== "child" && candidates.length > 0 && (
+              <Field label="Outras pessoas envolvidas" span={4} hint="opcional · podem ser várias">
                 <div className="people-picker">
                   {candidates.map(c => (
                     <button
@@ -563,13 +683,6 @@ function AddEventModal({ open, person, onClose, onSave }) {
             </Field>
             <Field label="Fonte" span={4} hint="onde essa informação foi encontrada">
               <TextInput value={form.sources} onChange={v => set("sources", v)} placeholder="Cartório de Caxias do Sul, livro 7, fls. 11"/>
-            </Field>
-            <Field label="Visibilidade" span={4}>
-              <SegmentedRadio
-                value={form.privacy}
-                onChange={v => set("privacy", v)}
-                options={[["family", "Família"], ["close", "Próximos"], ["private", "Privado"]]}
-              />
             </Field>
           </div>
         )}
@@ -761,16 +874,17 @@ function AddPersonModal({ open, onClose, onSave }) {
 
         {tab === "life" && (
           <div className="form-grid">
-            <Field label="Nascimento" span={4}>
-              <div className="date-row">
-                <input className="input input-sm" placeholder="Dia" value={form.birthDay} onChange={e => set("birthDay", e.target.value)}/>
-                <SelectInput
-                  value={form.birthMonth}
-                  onChange={v => set("birthMonth", v)}
-                  options={[["", "Mês"], ...["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i) => [String(i+1), m])]}
-                />
-                <input className="input input-sm" placeholder="Ano" value={form.birthYear} onChange={e => set("birthYear", e.target.value)}/>
-              </div>
+            <Field label="Nascimento" span={4} hint="se não souber a data exata, marque aproximada ou desconhecida">
+              <PartialDate
+                value={{
+                  day: form.birthDay, month: form.birthMonth, year: form.birthYear,
+                  precision: form.birthPrecision, approx: form.birthApprox,
+                }}
+                onChange={d => setForm(f => ({ ...f,
+                  birthDay: d.day || "", birthMonth: d.month || "", birthYear: d.year || "",
+                  birthPrecision: d.precision, birthApprox: d.approx,
+                }))}
+              />
             </Field>
             <Field label="Cidade" span={2}>
               <TextInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Caxias do Sul"/>
@@ -788,10 +902,19 @@ function AddPersonModal({ open, onClose, onSave }) {
             </Field>
             {!form.living && (
               <>
-                <Field label="Ano de falecimento" span={2}>
-                  <TextInput value={form.deathYear} onChange={v => set("deathYear", v)} placeholder=""/>
+                <Field label="Data do falecimento" span={4}>
+                  <PartialDate
+                    value={{
+                      day: form.deathDay, month: form.deathMonth, year: form.deathYear,
+                      precision: form.deathPrecision, approx: form.deathApprox,
+                    }}
+                    onChange={d => setForm(f => ({ ...f,
+                      deathDay: d.day || "", deathMonth: d.month || "", deathYear: d.year || "",
+                      deathPrecision: d.precision, deathApprox: d.approx,
+                    }))}
+                  />
                 </Field>
-                <Field label="Local" span={2}>
+                <Field label="Local" span={4}>
                   <TextInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder=""/>
                 </Field>
               </>

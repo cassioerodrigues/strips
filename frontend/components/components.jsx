@@ -1,7 +1,4 @@
 // Shared components: Sidebar, Header, Avatar, Badge, etc.
-// TODO: migrate when tree auto-layout lands (follow-up). CommandPalette ainda
-// lê FAMILY direto; quando o tree/people for 100% API, fazer este componente
-// consultar useTree() também.
 
 const SIDEBAR_NAV = [
   { id: "dashboard", label: "Início", icon: "home" },

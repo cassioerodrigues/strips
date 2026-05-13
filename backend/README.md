@@ -1,12 +1,12 @@
 # Stirps — Backend
 
-**Stirps** é um sistema de árvore genealógica multi-tenant (como MyHeritage, Ancestry.com) desenvolvido para explorar genealogia de forma colaborativa. Esta pasta contém o schema PostgreSQL do Supabase, as migrations e o script de seed. A API REST e o cliente de Storage ainda estão em desenvolvimento.
+**Stirps** é um sistema de árvore genealógica multi-tenant (como MyHeritage, Ancestry.com) desenvolvido para explorar genealogia de forma colaborativa. Esta pasta contém a API REST FastAPI, o schema PostgreSQL do Supabase, as migrations, o cliente de Storage e o script de seed.
 
 ## Pré-requisitos
 
 - **Docker** — para rodar Supabase localmente
 - **Node.js** — para instalar Supabase CLI (`npm i -g supabase`)
-- **Python 3.10+** — para rodar o seed
+- **Python 3.11+** — para rodar a API, testes e seed
 - **Conta Supabase** — free tier (para deploy em produção)
 
 ## Subir o Supabase localmente
@@ -145,6 +145,17 @@ A suíte de testes vive em `backend/tests/` e tem duas camadas:
    pelo keypair do `conftest.py`. São **automaticamente pulados** quando
    `TEST_DATABASE_URL` não está no ambiente.
 
+### Setup local de desenvolvimento
+
+As dependências da API e dos testes vêm de `pyproject.toml`:
+
+```bash
+cd /srv/strips/backend
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -e '.[dev]'
+```
+
 ### Rodar apenas a parte que não precisa de banco
 
 ```bash
@@ -152,7 +163,35 @@ cd /srv/strips/backend
 .venv/bin/pytest -q
 ```
 
-Tudo verde + 19 `skipped` (testes que esperam banco).
+Baseline validado em 2026-05-12: em alguns ambientes, esse comando pode
+ficar preso ao entrar nos smoke tests de routers que usam
+`httpx.AsyncClient(ASGITransport(...))` contra rotas FastAPI síncronas. O
+mesmo hang foi reproduzido com `/api/healthz`, então a causa provável é a
+combinação não pinada `fastapi==0.136.1`, `starlette==1.0.0`,
+`httpx==0.28.1`, `anyio==4.13.0` e `pytest==9.0.3`, não acesso ao banco.
+
+Enquanto essa pilha não for pinada/ajustada, use o comando mitigado para a
+suíte sem banco:
+
+```bash
+cd /srv/strips/backend
+env -u TEST_DATABASE_URL timeout 60 .venv/bin/pytest -q \
+  --ignore=tests/test_routers_auth_trees.py \
+  --ignore=tests/test_routers_members.py \
+  --ignore=tests/test_routers_unions_events.py \
+  --ignore=tests/test_routers_external_records.py \
+  --ignore=tests/test_routers_media.py \
+  --ignore=tests/test_routers_people.py \
+  --ignore=tests/test_routers_timeline.py
+```
+
+Resultado local validado em 2026-05-12:
+
+```text
+76 passed, 51 skipped, 0 failed in 1.10s
+```
+
+Os `51 skipped` são testes integrados que dependem de `TEST_DATABASE_URL`.
 
 ### Rodar a suíte completa (com Supabase local)
 
@@ -216,6 +255,39 @@ cd /srv/strips/backend
 # em outra janela:
 curl http://127.0.0.1:8001/api/healthz
 ```
+
+### Rodar com Docker
+
+Build e healthcheck local:
+
+```bash
+cd /srv/strips
+docker build -t stirps-backend ./backend
+docker run --rm -p 8001:8000 \
+  -e DATABASE_URL= \
+  -e APP_ENV=development \
+  -e CORS_ORIGINS=http://localhost:8000 \
+  stirps-backend
+curl http://127.0.0.1:8001/api/healthz
+```
+
+Resultado esperado:
+
+```json
+{"status":"ok"}
+```
+
+Para execução com banco real, configure as variáveis de ambiente no runtime:
+
+```bash
+docker run --rm -p 8001:8000 --env-file /srv/strips/backend/.env stirps-backend
+```
+
+Em EasyPanel, exponha a porta interna `8000` do container e configure as
+variáveis no painel. Não dependa de `backend/.env` estar dentro da imagem. Se o
+banco estiver fora do container, `127.0.0.1` dentro do `DATABASE_URL` aponta
+para o próprio container; use Supabase Cloud, um nome de serviço na rede Docker
+ou o host gateway.
 
 ### Subir em produção
 

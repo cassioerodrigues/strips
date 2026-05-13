@@ -65,6 +65,19 @@ python3 -m http.server 8000
 
 Os dados vêm de `frontend/scripts/data.js` — ainda não estão ligados ao banco.
 
+Para validar o container do frontend:
+
+```bash
+cd /srv/strips
+docker build -t stirps-frontend ./frontend
+docker run --rm -p 8080:80 stirps-frontend
+# acesse http://127.0.0.1:8080/
+```
+
+Em EasyPanel, o frontend expõe a porta interna `80`. No Dockerfile atual da
+`main`, o frontend não exige variáveis de ambiente para servir o mockup
+estático.
+
 ## Como subir o backend
 
 Detalhes em [`backend/README.md`](backend/README.md). Em resumo:
@@ -84,6 +97,44 @@ pip install -r requirements-seed.txt
 export DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 python db/seed/seed_from_mockup.py
 ```
+
+Para instalar dependências da API/testes e rodar a suíte sem banco:
+
+```bash
+cd backend
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -e '.[dev]'
+env -u TEST_DATABASE_URL timeout 60 .venv/bin/pytest -q \
+  --ignore=tests/test_routers_auth_trees.py \
+  --ignore=tests/test_routers_members.py \
+  --ignore=tests/test_routers_unions_events.py \
+  --ignore=tests/test_routers_external_records.py \
+  --ignore=tests/test_routers_media.py \
+  --ignore=tests/test_routers_people.py \
+  --ignore=tests/test_routers_timeline.py
+```
+
+Baseline local validado em 2026-05-12: `76 passed, 51 skipped, 0 failed in 1.10s`.
+Os skips são testes integrados que exigem `TEST_DATABASE_URL`.
+
+Para validar o container do backend:
+
+```bash
+cd /srv/strips
+docker build -t stirps-backend ./backend
+docker run --rm -p 8001:8000 \
+  -e DATABASE_URL= \
+  -e APP_ENV=development \
+  -e CORS_ORIGINS=http://localhost:8000 \
+  stirps-backend
+# em outra janela:
+curl http://127.0.0.1:8001/api/healthz
+```
+
+Em EasyPanel, o backend expõe a porta interna `8000`; configure
+`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+`SUPABASE_STORAGE_BUCKET` e `CORS_ORIGINS` no painel.
 
 ## Modelo de dados
 

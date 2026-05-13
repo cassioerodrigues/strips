@@ -1,5 +1,5 @@
 // Família Bertolini-Albuquerque
-// Generations: G1 (great-grandparents from Italy/Portugal), G2 (grandparents), G3 (parents), G4 (current user gen), G5 (children)
+// Generations: G1 (great-grandparents from Italy/Portugal), G2 (grandparents), G3 (parents and uncles), G4 (current user gen, cousins and children)
 
 window.FAMILY = {
   rootUserId: "p_helena",
@@ -87,6 +87,34 @@ window.FAMILY = {
       tags: ["Família materna"],
       generation: 2,
     },
+    p_vittorio: {
+      id: "p_vittorio",
+      first: "Vittorio",
+      last: "Bertolini",
+      sex: "M",
+      birth: { year: 1916, place: "São Paulo, SP" },
+      death: { year: 1998, place: "Campinas, SP" },
+      occupation: "Tipógrafo",
+      photo: "olive",
+      parents: ["p_giuseppe", "p_assunta"],
+      bio: "Irmão mais novo de Antônio. Trabalhou em gráficas no centro de São Paulo antes de se mudar para Campinas.",
+      tags: ["Brasil", "Família paterna"],
+      generation: 2,
+    },
+    p_teresa: {
+      id: "p_teresa",
+      first: "Teresa",
+      last: "Albuquerque",
+      sex: "F",
+      birth: { year: 1921, place: "Recife, PE" },
+      death: { year: 2010, place: "Olinda, PE" },
+      occupation: "Bibliotecária",
+      photo: "petrol",
+      parents: ["p_joao", "p_carmela"],
+      bio: "Irmã de Isabel. Organizou o acervo de cartas e fotografias da família Albuquerque.",
+      tags: ["Família materna"],
+      generation: 2,
+    },
 
     // ============ G3 — pais e tios (1940s-) ============
     p_ricardo: {
@@ -142,6 +170,32 @@ window.FAMILY = {
       parents: ["p_antonio", "p_isabel"],
       bio: "Tia paterna. Mora em Lisboa desde 1992.",
       tags: ["Tia"],
+      generation: 3,
+    },
+    p_sofia: {
+      id: "p_sofia",
+      first: "Sofia",
+      last: "Macedo",
+      sex: "F",
+      birth: { year: 1953, place: "Florianópolis, SC" },
+      death: null,
+      occupation: "Restauradora",
+      photo: "beige",
+      bio: "Casada com Marcos desde 1978. Especializou-se em restauração de documentos antigos.",
+      tags: ["Tia"],
+      generation: 3,
+    },
+    p_paulo: {
+      id: "p_paulo",
+      first: "Paulo",
+      last: "Nogueira",
+      sex: "M",
+      birth: { year: 1952, place: "Lisboa, Portugal" },
+      death: null,
+      occupation: "Editor",
+      photo: "petrol",
+      bio: "Casado com Lúcia. Trabalhou em editoras universitárias em Lisboa.",
+      tags: ["Tio"],
       generation: 3,
     },
 
@@ -202,6 +256,34 @@ window.FAMILY = {
       tags: ["Primo"],
       generation: 4,
     },
+    p_matheus: {
+      id: "p_matheus",
+      first: "Matheus",
+      last: "Bertolini Macedo",
+      sex: "M",
+      birth: { year: 1986, place: "Florianópolis, SC" },
+      death: null,
+      occupation: "Biólogo marinho",
+      photo: "olive",
+      parents: ["p_marcos", "p_sofia"],
+      bio: "Primo de Helena. Pesquisa ecossistemas costeiros no litoral catarinense.",
+      tags: ["Primo"],
+      generation: 4,
+    },
+    p_gabriela: {
+      id: "p_gabriela",
+      first: "Gabriela",
+      last: "Bertolini Nogueira",
+      sex: "F",
+      birth: { year: 1988, place: "Lisboa, Portugal" },
+      death: null,
+      occupation: "Jornalista",
+      photo: "beige",
+      parents: ["p_lucia", "p_paulo"],
+      bio: "Prima de Helena. Mantém contato com o ramo português da família.",
+      tags: ["Prima"],
+      generation: 4,
+    },
 
     // ============ Cônjuges ============
     p_diego: {
@@ -231,7 +313,7 @@ window.FAMILY = {
       generation: 4,
     },
 
-    // ============ G5 — filhos ============
+    // ============ G4 — filhos ============
     p_lorenzo: {
       id: "p_lorenzo",
       first: "Lorenzo",
@@ -244,7 +326,7 @@ window.FAMILY = {
       parents: ["p_helena", "p_diego"],
       bio: "Filho de Helena e Diego.",
       tags: ["Filho"],
-      generation: 5,
+      generation: 4,
     },
     p_alice: {
       id: "p_alice",
@@ -258,7 +340,7 @@ window.FAMILY = {
       parents: ["p_helena", "p_diego"],
       bio: "Filha de Helena e Diego.",
       tags: ["Filha"],
-      generation: 5,
+      generation: 4,
     },
     p_pedro: {
       id: "p_pedro",
@@ -272,7 +354,7 @@ window.FAMILY = {
       parents: ["p_rafael", "p_mariana"],
       bio: "Sobrinho.",
       tags: ["Sobrinho"],
-      generation: 5,
+      generation: 4,
     },
   },
 
@@ -282,6 +364,8 @@ window.FAMILY = {
     { partners: ["p_joao", "p_carmela"], year: 1908, place: "Olinda, PE" },
     { partners: ["p_antonio", "p_isabel"], year: 1944, place: "São Paulo, SP" },
     { partners: ["p_ricardo", "p_clarice"], year: 1976, place: "São Paulo, SP" },
+    { partners: ["p_marcos", "p_sofia"], year: 1978, place: "Florianópolis, SC" },
+    { partners: ["p_lucia", "p_paulo"], year: 1981, place: "Lisboa, Portugal" },
     { partners: ["p_helena", "p_diego"], year: 2014, place: "São Paulo, SP" },
     { partners: ["p_rafael", "p_mariana"], year: 2011, place: "Curitiba, PR" },
   ],

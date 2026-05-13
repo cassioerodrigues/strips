@@ -22,7 +22,7 @@ O projeto está em fase inicial. Esta árvore é, antes de tudo, da família **B
 .
 ├── frontend/            frontend ativo do projeto; Stirps.html é o entry point
 │   ├── components/      JSX components (app, tree, profile, dashboard, modals, ...)
-│   ├── scripts/         data.js com FAMILY mockada (19 pessoas, 6 uniões)
+│   ├── scripts/         data.js com FAMILY mockada (25 pessoas, 8 uniões)
 │   └── stylesheets/     CSS
 ├── template/            arquivos estáticos entregues pelo designer. Não é a
 │                        pasta do frontend ativo e não deve ser servida em

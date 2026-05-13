@@ -62,6 +62,9 @@
     const headers = Object.assign({}, options.headers || {});
 
     const token = await currentAccessToken();
+    // O bearer é anexado mesmo quando `path` é uma URL absoluta — o backend
+    // alvo é sempre o mesmo, e callers que passam URLs absolutas (raros) o
+    // fazem por conveniência, não para apontar pra outra origin.
     if (token && !headers["Authorization"] && !headers["authorization"]) {
       headers["Authorization"] = "Bearer " + token;
     }

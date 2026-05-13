@@ -3,13 +3,13 @@
 // Carrega APÓS:
 //   - scripts/config.js        (define window.STIRPS_CONFIG)
 //   - Supabase UMD              (define window.supabase com createClient)
-//   - React UMD                 (define window.React — usamos useState/useEffect)
+//   - React UMD                 (define window.React — usamos useSyncExternalStore, React 18+)
 //
 // Responsabilidades:
 //   - Inicializa o client Supabase usando STIRPS_CONFIG.supabaseUrl / supabaseAnonKey.
 //   - Mantém um store global { status, session, profile, trees, error } com
-//     subscription pattern (cada componente que chama useAuth() registra um
-//     listener via React.useState/useEffect).
+//     subscription pattern (useAuth() conecta cada componente via
+//     React.useSyncExternalStore).
 //   - Expõe window.useAuth() retornando estado + ações
 //     (signInWithPassword, signUpWithPassword, signOut, refreshMe).
 //   - Após autenticar, busca /api/me uma vez e mescla profile/trees no estado.
@@ -31,10 +31,15 @@
 
   const listeners = new Set();
 
+  // Snapshot imutável recriado a cada setState. Ter uma referência estável
+  // entre chamadas a getSnapshot() é requisito do useSyncExternalStore: se a
+  // referência mudar sem motivo (ex.: nova cópia a cada call), o React
+  // dispara um rerender desnecessário a cada render.
+  let snapshot = Object.assign({}, state);
+
   function setState(patch) {
     Object.assign(state, patch);
-    // copia rasa para que React detecte mudança de referência
-    const snapshot = Object.assign({}, state);
+    snapshot = Object.assign({}, state);
     listeners.forEach(function (fn) {
       try {
         fn(snapshot);
@@ -47,7 +52,7 @@
   }
 
   function getSnapshot() {
-    return Object.assign({}, state);
+    return snapshot;
   }
 
   // ------------------------------------------------------------------
@@ -91,12 +96,37 @@
   // ------------------------------------------------------------------
   // /api/me fetch após autenticar
   // ------------------------------------------------------------------
-  async function fetchMe() {
+  // Dedup: o bootstrap dispara dois caminhos para a mesma sessão restaurada
+  // (getSession().then e onAuthStateChange("INITIAL_SESSION")). Sem esse
+  // guarda, ambos chamam fetchMe() em paralelo no primeiro load. A chave é
+  // o access_token, que é estável entre os dois eventos para a mesma sessão.
+  let meInFlight = false;
+  let lastMeAccessToken = null;
+
+  function meKey(session) {
+    return session && session.access_token ? session.access_token : null;
+  }
+
+  function resetMeDedup() {
+    meInFlight = false;
+    lastMeAccessToken = null;
+  }
+
+  async function fetchMe(sessionForKey) {
     if (!window.api || typeof window.api.me !== "function") {
       // api.js ainda não carregou — adia
       // eslint-disable-next-line no-console
       console.warn("[stirps] window.api.me ausente, pulando refreshMe");
       return;
+    }
+    // Determina a chave da sessão atual (caller pode passá-la explicitamente
+    // para evitar uma corrida entre getSession e setState do listener).
+    const key = meKey(sessionForKey) || meKey(state.session);
+    if (key) {
+      if (meInFlight && lastMeAccessToken === key) return;
+      if (!meInFlight && lastMeAccessToken === key) return; // já completou
+      meInFlight = true;
+      lastMeAccessToken = key;
     }
     try {
       const data = await window.api.me();
@@ -113,6 +143,7 @@
         } catch (_) {
           /* ignore */
         }
+        resetMeDedup();
         setState({
           status: "unauthenticated",
           session: null,
@@ -122,12 +153,16 @@
         });
         return;
       }
-      // outros erros: mantém autenticado, mas registra o erro
+      // outros erros: mantém autenticado, mas registra o erro.
+      // Limpa o marker para permitir retry via refreshMe().
+      if (key && lastMeAccessToken === key) lastMeAccessToken = null;
       setState({
         error:
           (e && e.message) ||
           "Não foi possível carregar /api/me. Verifique a conexão e tente novamente.",
       });
+    } finally {
+      meInFlight = false;
     }
   }
 
@@ -141,7 +176,7 @@
         const session = res && res.data && res.data.session ? res.data.session : null;
         if (session) {
           setState({ status: "authenticated", session: session, error: null });
-          fetchMe();
+          fetchMe(session);
         } else {
           setState({ status: "unauthenticated", session: null });
         }
@@ -157,6 +192,7 @@
 
     supabaseClient.auth.onAuthStateChange(function (event, session) {
       if (event === "SIGNED_OUT" || !session) {
+        resetMeDedup();
         setState({
           status: "unauthenticated",
           session: null,
@@ -165,14 +201,19 @@
         });
         return;
       }
-      // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION com sessão
-      const wasAuthenticated = state.status === "authenticated";
-      setState({ status: "authenticated", session: session, error: null });
-      // Só re-buscamos /me em eventos "humanos" — não a cada refresh de token,
-      // que dispara em background a cada hora e não muda profile/trees.
-      if (!wasAuthenticated || event === "SIGNED_IN" || event === "USER_UPDATED") {
-        fetchMe();
+      // TOKEN_REFRESHED: silencioso, a cada ~hora. Não toca status/error/
+      // profile/trees — apenas atualiza a session (novo access_token). Isso
+      // evita limpar uma mensagem de erro que a UI esteja mostrando.
+      if (event === "TOKEN_REFRESHED") {
+        setState({ session: session });
+        return;
       }
+      // SIGNED_IN, USER_UPDATED, INITIAL_SESSION com sessão.
+      setState({ status: "authenticated", session: session, error: null });
+      // fetchMe() é deduplicado por access_token — se getSession() já
+      // disparou para esta mesma sessão restaurada (caso comum no
+      // INITIAL_SESSION), a segunda chamada é no-op.
+      fetchMe(session);
     });
   }
 
@@ -219,6 +260,7 @@
     }
     // garante reset mesmo se signOut() falhar — o listener também faria isso,
     // mas idempotência aqui evita estado preso.
+    resetMeDedup();
     setState({
       status: "unauthenticated",
       session: null,
@@ -230,32 +272,31 @@
 
   async function refreshMe() {
     if (state.status !== "authenticated") return;
-    await fetchMe();
+    // Chamada explícita do usuário — invalida o marker para forçar refetch.
+    lastMeAccessToken = null;
+    await fetchMe(state.session);
   }
 
   // ------------------------------------------------------------------
-  // useAuth hook
+  // useAuth hook (React 18+ useSyncExternalStore)
   // ------------------------------------------------------------------
+  // subscribe/getSnapshot têm identidade estável (escopo de módulo), evitando
+  // que useSyncExternalStore re-assine a cada commit. setState garante que a
+  // referência de `snapshot` só muda quando o estado realmente mudou — o
+  // próprio React então pula rerenders desnecessários.
+  function subscribe(listener) {
+    listeners.add(listener);
+    return function unsubscribe() {
+      listeners.delete(listener);
+    };
+  }
+
   window.useAuth = function useAuth() {
-    if (!window.React || !window.React.useState || !window.React.useEffect) {
-      throw new Error("[stirps] useAuth requer React carregado antes de auth.js");
-    }
     const React = window.React;
-    const setter = React.useState(getSnapshot())[1];
-
-    React.useEffect(function () {
-      function listener(snapshot) {
-        setter(snapshot);
-      }
-      listeners.add(listener);
-      // sincroniza com o estado atual (pode ter mudado entre render e effect)
-      setter(getSnapshot());
-      return function () {
-        listeners.delete(listener);
-      };
-    }, []);
-
-    const snap = getSnapshot();
+    if (!React || typeof React.useSyncExternalStore !== "function") {
+      throw new Error("[stirps] useAuth requer React 18+ (useSyncExternalStore) antes de auth.js");
+    }
+    const snap = React.useSyncExternalStore(subscribe, getSnapshot);
     return {
       status: snap.status,
       session: snap.session,
@@ -269,7 +310,8 @@
     };
   };
 
-  // Expor para debug e para api.js poder pegar o token.
+  // Handle de debug — leitura/ações via console. NB: api.js NÃO depende
+  // deste objeto; ele lê window.supabaseClient direto para obter o token.
   window.__stirpsAuth = {
     getState: getSnapshot,
     signOut: signOut,

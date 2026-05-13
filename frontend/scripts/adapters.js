@@ -146,10 +146,35 @@
     };
   }
 
+  function adaptEvent(item) {
+    if (!item) return null;
+    const labelMap = {
+      residence: "Mudança",
+      occupation: "Carreira",
+      education: "Formação",
+      custom: item.custom_label || "Evento",
+    };
+    return {
+      id: item.id,
+      treeId: item.tree_id,
+      personId: item.person_id || null,
+      unionId: item.union_id || null,
+      type: item.type || "custom",
+      customLabel: item.custom_label || null,
+      year: item.year || null,
+      month: item.month || null,
+      day: item.day || null,
+      title: labelMap[item.type] || item.custom_label || item.type || "Evento",
+      place: item.place || "",
+      description: item.description || "",
+    };
+  }
+
   window.adapters = {
     adaptPerson: adaptPerson,
     adaptRelations: adaptRelations,
     adaptStats: adaptStats,
     adaptTimelineItem: adaptTimelineItem,
+    adaptEvent: adaptEvent,
   };
 })();

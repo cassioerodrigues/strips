@@ -166,6 +166,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const [hover, setHover] = React.useState(null);
   const [highlightLineage, setHighlightLineage] = React.useState(null); // null|"paternal"|"maternal"
   const [addOpen, setAddOpen] = React.useState(false);
+  const [mutation, setMutation] = React.useState({ saving: false, error: null });
   const containerRef = React.useRef(null);
   const dragRef = React.useRef(null);
 
@@ -274,6 +275,31 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const apiLoading = tree.status === "loading" || tree.status === "idle";
   const apiEmpty = tree.status === "empty" || (tree.status === "ready" && Array.isArray(tree.people) && tree.people.length === 0);
   const apiError = tree.status === "error";
+  const canEdit = useMockFallback ? true : !!tree.canEdit;
+  const readOnlyReason = tree.role === "viewer"
+    ? "Visualizadores não podem editar esta árvore."
+    : "Somente leitura.";
+
+  function friendlyError(e) {
+    if (e && e.status === 403) return "Você não tem permissão para alterar esta árvore.";
+    if (e && e.status === 422) return "Alguns campos não foram aceitos pela API. Revise os dados e tente novamente.";
+    return (e && e.message) || "Não foi possível salvar a alteração.";
+  }
+
+  async function savePerson(form) {
+    setMutation({ saving: true, error: null });
+    try {
+      if (useMockFallback) {
+        setMutation({ saving: false, error: null });
+        return;
+      }
+      await window.useTree.actions.createPerson(form);
+      setMutation({ saving: false, error: null });
+    } catch (e) {
+      setMutation({ saving: false, error: friendlyError(e) });
+      throw e;
+    }
+  }
 
   return (
     <div className="page page-tree">
@@ -284,8 +310,17 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
           <button className="chip"><Icon name="calendar" size={13}/>Por época</button>
         </div>
         <div className="tree-toolbar-right">
-          <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>
-          {window.AddPersonModal && <window.AddPersonModal open={addOpen} onClose={() => setAddOpen(false)}/>}
+          {canEdit && <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>}
+          {window.AddPersonModal && <window.AddPersonModal
+            open={addOpen}
+            people={apiLayout ? tree.people : Object.values(F.people)}
+            onClose={() => setAddOpen(false)}
+            onSave={savePerson}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
         </div>
       </div>
 

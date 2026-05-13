@@ -29,6 +29,8 @@
     status: "idle",
     treeId: null,
     tree: null,
+    role: null,
+    canEdit: false,
     people: [],
     peopleById: {},
     unions: [],
@@ -108,6 +110,20 @@
     return null;
   }
 
+  function activeMembership(auth) {
+    if (!auth || !Array.isArray(auth.trees) || auth.trees.length === 0) return null;
+    return auth.trees[0] || null;
+  }
+
+  function roleFromAuth(auth) {
+    const membership = activeMembership(auth);
+    return membership && membership.role ? membership.role : null;
+  }
+
+  function canEditRole(role) {
+    return role === "owner" || role === "editor";
+  }
+
   function tokenKey(auth) {
     return auth && auth.session && auth.session.access_token
       ? auth.session.access_token
@@ -122,7 +138,8 @@
 
     loadKey = key;
     loadInFlight = true;
-    setState({ status: "loading", treeId: treeId, error: null });
+    const role = roleFromAuth(auth);
+    setState({ status: "loading", treeId: treeId, role: role, canEdit: canEditRole(role), error: null });
 
     const adapt = window.adapters || {};
     const api = window.api;
@@ -248,6 +265,8 @@
         status: "unavailable",
         treeId: null,
         tree: null,
+        role: null,
+        canEdit: false,
         people: [],
         peopleById: {},
         unions: [],
@@ -265,6 +284,8 @@
         status: "empty",
         treeId: null,
         tree: null,
+        role: roleFromAuth(auth),
+        canEdit: canEditRole(roleFromAuth(auth)),
         people: [],
         peopleById: {},
         unions: [],
@@ -333,11 +354,11 @@
   // Mantém um cache simples por sessão. Não tenta invalidar — pequenas
   // árvores e perfis raramente mudam em tempo real; refetch manual via
   // useTree.refetch() ainda re-popula o snapshot principal.
-  const personCache = new Map(); // id → { status, person, relations, error }
+  const personCache = new Map(); // id → { status, person, relations, events, error }
   const personListeners = new Map(); // id → Set<listener>
 
   function getPersonSnap(id) {
-    return personCache.get(id) || { status: "idle", person: null, relations: null, error: null };
+    return personCache.get(id) || { status: "idle", person: null, relations: null, events: [], error: null };
   }
 
   function setPersonSnap(id, patch) {
@@ -372,14 +393,18 @@
     try {
       // Pessoa + relações em paralelo. Se a pessoa não existir, falha vem
       // pelo primeiro (404) e propagamos como erro.
-      const [personRaw, relationsRaw] = await Promise.all([
+      const [personRaw, relationsRaw, eventsRaw] = await Promise.all([
         window.api.fetch("/people/" + id),
         window.api.fetch("/people/" + id + "/relations"),
+        window.api.fetch("/people/" + id + "/events"),
       ]);
       setPersonSnap(id, {
         status: "ready",
         person: adapt.adaptPerson ? adapt.adaptPerson(personRaw) : personRaw,
         relations: adapt.adaptRelations ? adapt.adaptRelations(relationsRaw) : relationsRaw,
+        events: Array.isArray(eventsRaw)
+          ? eventsRaw.map(adapt.adaptEvent || function (x) { return x; }).filter(Boolean)
+          : [],
         error: null,
       });
     } catch (e) {
@@ -388,6 +413,7 @@
         status: status,
         person: null,
         relations: null,
+        events: [],
         error: (e && e.message) || "Falha ao carregar pessoa.",
       });
     }
@@ -434,12 +460,90 @@
     );
 
     if (mock) return { status: "fallback", person: null, relations: null, error: null };
-    if (!personId) return { status: "idle", person: null, relations: null, error: null };
-    if (noApi) return { status: "unavailable", person: null, relations: null, error: null };
+    if (!personId) return { status: "idle", person: null, relations: null, events: [], error: null };
+    if (noApi) return { status: "unavailable", person: null, relations: null, events: [], error: null };
     return liveSnap;
   }
 
+  function invalidatePerson(personId) {
+    if (!personId) return;
+    personCache.delete(personId);
+    const ls = personListeners.get(personId);
+    if (ls) {
+      const next = getPersonSnap(personId);
+      ls.forEach(function (fn) { fn(next); });
+    }
+  }
+
+  async function mutateAndRefresh(mutation, affectedPersonId) {
+    if (!state.canEdit) {
+      throw new Error("Visualizadores não podem editar esta árvore.");
+    }
+    const result = await mutation();
+    if (affectedPersonId) invalidatePerson(affectedPersonId);
+    await refetch();
+    return result;
+  }
+
+  const actions = {
+    createPerson: function (form) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.createPersonWithRelation(state.treeId, form);
+      }, form && form.relTo);
+    },
+    updatePerson: function (personId, form) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.updatePerson(personId, form);
+      }, personId);
+    },
+    deletePerson: function (personId) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.deletePerson(personId);
+      }, personId);
+    },
+    removeParent: function (childId, parentId) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.removeParent(childId, parentId);
+      }, childId);
+    },
+    addEvent: function (personId, form) {
+      return mutateAndRefresh(function () {
+        if (form && form.type === "marriage" && form.marriageWith) {
+          return window.genealogyApi.createUnion(
+            state.treeId,
+            window.genealogyApi.unionPayloadFromForm(form, personId),
+          );
+        }
+        return window.genealogyApi.createEvent(
+          state.treeId,
+          window.genealogyApi.eventPayloadFromForm(form, personId, null),
+        );
+      }, personId);
+    },
+    updateEvent: function (personId, eventId, form) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.updateEvent(eventId, window.genealogyApi.eventPayloadFromForm(form, null, null));
+      }, personId);
+    },
+    updateUnion: function (personId, unionId, payload) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.updateUnion(unionId, payload);
+      }, personId);
+    },
+    deleteEvent: function (personId, eventId) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.deleteEvent(eventId);
+      }, personId);
+    },
+    deleteUnion: function (personId, unionId) {
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.deleteUnion(unionId);
+      }, personId);
+    },
+  };
+
   window.useTree = useTree;
+  useTree.actions = Object.assign(useTree.actions || {}, actions);
   window.usePerson = usePerson;
 
   // Handle de debug.

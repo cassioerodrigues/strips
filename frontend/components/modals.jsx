@@ -181,7 +181,7 @@ function TagsInput({ value = [], onChange }) {
 // EDIT PERSON MODAL
 // ============================================================
 
-function EditPersonModal({ open, person, onClose, onSave }) {
+function EditPersonModal({ open, person, onClose, onSave, onDelete, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [form, setForm] = React.useState(null);
   const [tab, setTab] = React.useState("identity");
   const [dirty, setDirty] = React.useState(false);
@@ -218,9 +218,25 @@ function EditPersonModal({ open, person, onClose, onSave }) {
   if (!form) return null;
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setDirty(true); };
 
-  function save() {
-    onSave?.(form);
-    onClose();
+  async function save() {
+    if (readOnly || saving) return;
+    try {
+      await onSave?.(form);
+      onClose();
+    } catch (_) {
+      // O caller mantém a mensagem em `error`.
+    }
+  }
+
+  async function deletePerson() {
+    if (readOnly || saving || !onDelete) return;
+    if (!window.confirm("Excluir esta pessoa da árvore? Esta ação não pode ser desfeita.")) return;
+    try {
+      await onDelete();
+      onClose();
+    } catch (_) {
+      // O caller mantém a mensagem em `error`.
+    }
   }
 
   function tryClose() {
@@ -260,8 +276,8 @@ function EditPersonModal({ open, person, onClose, onSave }) {
             <div className="photo-edit-row">
               <Avatar person={person} size={84}/>
               <div className="photo-edit-actions">
-                <button className="btn btn-sm btn-ghost"><Icon name="upload" size={13}/>Trocar foto</button>
-                <button className="btn btn-sm btn-ghost btn-danger-soft"><Icon name="trash" size={13}/>Remover</button>
+                {!readOnly && <button className="btn btn-sm btn-ghost"><Icon name="upload" size={13}/>Trocar foto</button>}
+                {!readOnly && <button className="btn btn-sm btn-ghost btn-danger-soft"><Icon name="trash" size={13}/>Remover</button>}
                 <div className="photo-edit-hint">JPG, PNG ou TIFF. Máx 8 MB. Fotos antigas serão restauradas automaticamente.</div>
               </div>
             </div>
@@ -389,24 +405,30 @@ function EditPersonModal({ open, person, onClose, onSave }) {
               <div className="meta-pill"><Icon name="clock" size={12}/>Última edição há 3 dias por você</div>
               <div className="meta-pill"><Icon name="link" size={12}/>ID: {person?.id}</div>
             </div>
-            <button className="btn btn-ghost btn-danger-soft" style={{marginTop: 6}}>
+            {!readOnly && <button className="btn btn-ghost btn-danger-soft" style={{marginTop: 6}} onClick={deletePerson} disabled={saving}>
               <Icon name="trash" size={13}/>Excluir esta pessoa do acervo
-            </button>
+            </button>}
           </div>
         )}
       </div>
 
       <div className="modal-foot">
         <div className="modal-foot-hint">
-          {dirty
+          {error
+            ? <span className="auth-error" role="alert">{error}</span>
+            : readOnly
+            ? <>{readOnlyReason || "Somente leitura"}</>
+            : dirty
             ? <><span className="dirty-dot"/>Alterações não salvas</>
             : <>Tudo sincronizado</>}
         </div>
         <div className="modal-foot-actions">
-          <button className="btn btn-ghost" onClick={tryClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={!dirty}>
-            <Icon name="check" size={14}/>Salvar alterações
-          </button>
+          <button className="btn btn-ghost" onClick={tryClose}>{readOnly ? "Fechar" : "Cancelar"}</button>
+          {!readOnly && (
+            <button className="btn btn-primary" onClick={save} disabled={!dirty || saving}>
+              <Icon name="check" size={14}/>{saving ? "Salvando..." : "Salvar alterações"}
+            </button>
+          )}
         </div>
       </div>
     </ModalShell>
@@ -429,7 +451,7 @@ const EVENT_TYPES = [
   { id: "custom", label: "Outro", icon: "plus", tone: "neutral" },
 ];
 
-function AddEventModal({ open, person, onClose, onSave }) {
+function AddEventModal({ open, person, people = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [step, setStep] = React.useState(1);
   const [form, setForm] = React.useState({
     type: "marriage",
@@ -476,9 +498,14 @@ function AddEventModal({ open, person, onClose, onSave }) {
 
   const canAdvance = step === 1 ? !!form.type : true;
 
-  function save() {
-    onSave?.(form);
-    onClose();
+  async function save() {
+    if (readOnly || saving) return;
+    try {
+      await onSave?.(form);
+      onClose();
+    } catch (_) {
+      // O caller mantém a mensagem em `error`.
+    }
   }
 
   function toggleRelated(id) {
@@ -489,7 +516,10 @@ function AddEventModal({ open, person, onClose, onSave }) {
   }
 
   const F = window.FAMILY;
-  const candidates = person ? Object.values(F.people).filter(x => x.id !== person.id) : [];
+  const sourcePeople = people || Object.values(F.people);
+  const peopleById = {};
+  sourcePeople.forEach(p => { peopleById[p.id] = p; });
+  const candidates = person ? sourcePeople.filter(x => x.id !== person.id) : [];
   const eventDef = EVENT_TYPES.find(e => e.id === form.type);
 
   return (
@@ -585,9 +615,9 @@ function AddEventModal({ open, person, onClose, onSave }) {
                   <div className="pair-side pair-side-pick">
                     {form.marriageWith ? (
                       <>
-                        <Avatar person={F.people[form.marriageWith]} size={48}/>
-                        <div className="pair-name">{F.people[form.marriageWith].first} {F.people[form.marriageWith].last}</div>
-                        <div className="pair-meta">{F.people[form.marriageWith].birth?.year}{F.people[form.marriageWith].death ? `–${F.people[form.marriageWith].death.year}` : ""}</div>
+                        <Avatar person={peopleById[form.marriageWith]} size={48}/>
+                        <div className="pair-name">{peopleById[form.marriageWith].first} {peopleById[form.marriageWith].last}</div>
+                        <div className="pair-meta">{peopleById[form.marriageWith].birth?.year}{peopleById[form.marriageWith].death ? `–${peopleById[form.marriageWith].death.year}` : ""}</div>
                         <button type="button" className="pair-clear" onClick={() => set("marriageWith", "")}>Trocar</button>
                       </>
                     ) : (
@@ -690,18 +720,23 @@ function AddEventModal({ open, person, onClose, onSave }) {
 
       <div className="modal-foot">
         <div className="modal-foot-hint">
-          Passo {step} de 3
+          {error
+            ? <span className="auth-error" role="alert">{error}</span>
+            : readOnly
+            ? <>{readOnlyReason || "Somente leitura"}</>
+            : <>Passo {step} de 3</>}
         </div>
         <div className="modal-foot-actions">
-          {step > 1 && <button className="btn btn-ghost" onClick={() => setStep(step - 1)}><Icon name="arrow-left" size={13}/>Voltar</button>}
-          {step < 3 && (
+          {readOnly && <button className="btn btn-ghost" onClick={onClose}>Fechar</button>}
+          {!readOnly && step > 1 && <button className="btn btn-ghost" onClick={() => setStep(step - 1)} disabled={saving}><Icon name="arrow-left" size={13}/>Voltar</button>}
+          {!readOnly && step < 3 && (
             <button className="btn btn-primary" onClick={() => setStep(step + 1)} disabled={!canAdvance}>
               Continuar<Icon name="arrow-right" size={13}/>
             </button>
           )}
-          {step === 3 && (
-            <button className="btn btn-primary" onClick={save}>
-              <Icon name="check" size={14}/>Adicionar evento
+          {!readOnly && step === 3 && (
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              <Icon name="check" size={14}/>{saving ? "Salvando..." : "Adicionar evento"}
             </button>
           )}
         </div>
@@ -718,7 +753,7 @@ window.AddEventModal = AddEventModal;
 // ADD PERSON MODAL
 // ============================================================
 
-function AddPersonModal({ open, onClose, onSave }) {
+function AddPersonModal({ open, people = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const F = window.FAMILY;
   const [form, setForm] = React.useState(null);
   const [tab, setTab] = React.useState("basic");
@@ -743,12 +778,20 @@ function AddPersonModal({ open, onClose, onSave }) {
 
   const canSave = form.first && form.last && form.relTo;
 
-  function save() {
-    onSave?.(form);
-    onClose();
+  async function save() {
+    if (readOnly || saving) return;
+    try {
+      await onSave?.(form);
+      onClose();
+    } catch (_) {
+      // O caller mantém a mensagem em `error`.
+    }
   }
 
-  const peopleArr = Object.values(F.people).sort((a,b) =>
+  const sourcePeople = people || Object.values(F.people);
+  const peopleById = {};
+  sourcePeople.forEach(p => { peopleById[p.id] = p; });
+  const peopleArr = sourcePeople.slice().sort((a,b) =>
     (b.birth?.year || 0) - (a.birth?.year || 0)
   );
 
@@ -862,10 +905,10 @@ function AddPersonModal({ open, onClose, onSave }) {
                 <Icon name="sparkle" size={14}/>
                 <div>
                   <strong>Pré-visualização:</strong> {form.first || "Nova pessoa"} {form.last} será inserido(a) como {" "}
-                  {form.relType === "child" && <>filho(a) de <strong>{F.people[form.relTo].first} {F.people[form.relTo].last}</strong></>}
-                  {form.relType === "parent" && <>pai/mãe de <strong>{F.people[form.relTo].first} {F.people[form.relTo].last}</strong></>}
-                  {form.relType === "spouse" && <>cônjuge de <strong>{F.people[form.relTo].first} {F.people[form.relTo].last}</strong></>}
-                  {form.relType === "sibling" && <>irmão/irmã de <strong>{F.people[form.relTo].first} {F.people[form.relTo].last}</strong></>}.
+                  {form.relType === "child" && <>filho(a) de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
+                  {form.relType === "parent" && <>pai/mãe de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
+                  {form.relType === "spouse" && <>cônjuge de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
+                  {form.relType === "sibling" && <>irmão/irmã de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}.
                 </div>
               </div>
             )}
@@ -944,15 +987,21 @@ function AddPersonModal({ open, onClose, onSave }) {
 
       <div className="modal-foot">
         <div className="modal-foot-hint">
-          {!canSave
+          {error
+            ? <span className="auth-error" role="alert">{error}</span>
+            : readOnly
+            ? <>{readOnlyReason || "Somente leitura"}</>
+            : !canSave
             ? <><span className="dirty-dot"/>Preencha nome, sobrenome e vínculo</>
             : <><Icon name="check" size={12}/>Pronto para adicionar</>}
         </div>
         <div className="modal-foot-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={!canSave}>
-            <Icon name="plus" size={14}/>Adicionar à árvore
-          </button>
+          <button className="btn btn-ghost" onClick={onClose}>{readOnly ? "Fechar" : "Cancelar"}</button>
+          {!readOnly && (
+            <button className="btn btn-primary" onClick={save} disabled={!canSave || saving}>
+              <Icon name="plus" size={14}/>{saving ? "Salvando..." : "Adicionar à árvore"}
+            </button>
+          )}
         </div>
       </div>
     </ModalShell>

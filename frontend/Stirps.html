@@ -19,7 +19,11 @@
      antes de qualquer outro script para que React/components possam ler de
      window.STIRPS_CONFIG sincronamente. Ver frontend/README.md. -->
 <script src="scripts/config.js"></script>
-<script>window.STIRPS_CONFIG = window.STIRPS_CONFIG || { apiBaseUrl: "", supabaseUrl: "", supabaseAnonKey: "" };</script>
+<script>
+  if (!window.STIRPS_CONFIG) {
+    console.error("[stirps] STIRPS_CONFIG missing — scripts/config.js did not load");
+  }
+</script>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>

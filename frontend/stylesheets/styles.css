@@ -568,7 +568,38 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
   border-color: var(--olive);
   box-shadow: 0 0 0 3px var(--olive-soft), var(--shadow-md);
 }
+.tnode-root {
+  border-color: var(--terracotta, #a85d3a);
+  box-shadow: 0 0 0 3px rgba(168,93,58,0.18), var(--shadow-md);
+}
 .tnode-dim { opacity: 0.32; }
+
+.tnode-pin {
+  position: absolute; top: 4px; right: 4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: none; background: transparent;
+  color: var(--muted-2); cursor: pointer;
+  opacity: 0; transition: opacity 0.15s, background 0.15s;
+  z-index: 2;
+}
+.tnode:hover .tnode-pin { opacity: 0.7; }
+.tnode-pin:hover { opacity: 1 !important; background: rgba(0,0,0,0.06); color: var(--ink); }
+.tnode-root .tnode-pin { opacity: 1; color: var(--terracotta, #a85d3a); }
+
+.chip-root-indicator {
+  background: var(--terracotta-soft, rgba(168,93,58,0.10));
+  border-color: var(--terracotta, #a85d3a);
+  color: var(--terracotta-2, #7a4428);
+}
+.chip-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,0.08); color: inherit;
+  font-size: 11px; line-height: 1; padding: 0;
+  cursor: pointer; margin-left: 2px;
+}
+.chip-close:hover { background: rgba(0,0,0,0.16); }
 
 .gen-rail {
   position: absolute; left: 0; top: 60px; bottom: 0;

@@ -108,19 +108,26 @@ function computeLayout(focusId) {
   return layout;
 }
 
-function TreeNode({ p, x, y, focused, dimmed, onClick, onHover }) {
+function TreeNode({ p, x, y, focused, dimmed, isRoot, onClick, onSetRoot, onHover }) {
   // Sex-based accent: men petrol, women terracotta
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
   const isLiving = !p.death;
 
   return (
     <div
-      className={"tnode " + (focused ? "tnode-focus " : "") + (dimmed ? "tnode-dim " : "")}
+      className={"tnode " + (focused ? "tnode-focus " : "") + (dimmed ? "tnode-dim " : "") + (isRoot ? "tnode-root " : "")}
       style={{ left: x, top: y, width: NODE_W, height: NODE_H }}
       onClick={() => onClick(p.id)}
       onMouseEnter={() => onHover(p.id)}
       onMouseLeave={() => onHover(null)}
     >
+      <button
+        className="tnode-pin"
+        title="Centralizar árvore nesta pessoa"
+        onClick={(e) => { e.stopPropagation(); onSetRoot(p.id); }}
+      >
+        <Icon name="pin" size={12}/>
+      </button>
       <div className="tnode-strip" style={{ background: accentColor }}/>
       <div className="tnode-inner">
         <Avatar person={p} size={48}/>
@@ -156,11 +163,13 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
       tree.people,
       tree.unions || [],
       tree.relationsByChild || {},
+      rootPersonId || undefined,
     );
-  }, [apiCanRender, tree.people, tree.unions, tree.relationsByChild]);
+  }, [apiCanRender, tree.people, tree.unions, tree.relationsByChild, rootPersonId]);
   const layout = apiLayout || mockLayout;
   const peopleById = apiLayout ? (tree.peopleById || {}) : F.people;
   const focusId = apiLayout ? (tree.people[0] && tree.people[0].id) : "p_helena";
+  const [rootPersonId, setRootPersonId] = React.useState(null);
   const [zoom, setZoom] = React.useState(0.85);
   const [pan, setPan] = React.useState({ x: 60, y: 40 });
   const [hover, setHover] = React.useState(null);
@@ -308,6 +317,13 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
         <div className="tree-toolbar-left">
           <button className="chip"><Icon name="filter" size={13}/>Filtros</button>
           <button className="chip"><Icon name="calendar" size={13}/>Por época</button>
+          {rootPersonId && peopleById[rootPersonId] && (
+            <span className="chip chip-root-indicator">
+              <Icon name="pin" size={13}/>
+              {peopleById[rootPersonId].first} {peopleById[rootPersonId].last}
+              <button className="chip-close" onClick={() => setRootPersonId(null)} title="Voltar à visão padrão">✕</button>
+            </span>
+          )}
         </div>
         <div className="tree-toolbar-right">
           {canEdit && <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>}
@@ -395,8 +411,10 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
               x={n.x}
               y={n.y}
               focused={n.id === focusId}
+              isRoot={n.id === rootPersonId}
               dimmed={!apiLayout && isDimmed(n.id)}
               onClick={onPersonClick}
+              onSetRoot={setRootPersonId}
               onHover={setHover}
             />
           ))}

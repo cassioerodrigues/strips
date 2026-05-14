@@ -6,6 +6,10 @@ const source = fs.readFileSync(
   path.resolve(__dirname, "..", "components", "other-pages.jsx"),
   "utf8",
 );
+const profileSource = fs.readFileSync(
+  path.resolve(__dirname, "..", "components", "profile.jsx"),
+  "utf8",
+);
 
 const peoplePageStart = source.indexOf("function PeoplePage");
 const timelinePageStart = source.indexOf("function TimelinePage");
@@ -33,4 +37,20 @@ assert.match(
   peoplePage,
   /EditPersonModal/,
   "PeoplePage should open EditPersonModal",
+);
+
+assert.match(
+  profileSource,
+  /Excluir \$\{name\} da .+rvore\? Esta a.+o n.+o pode ser desfeita\./,
+  "Profile delete should confirm before deleting a person",
+);
+assert.match(
+  profileSource,
+  /btn btn-ghost btn-danger-soft[^>]+onClick=\{\(\) => deletePerson\(\)\}/,
+  "Profile should expose a direct delete action",
+);
+assert.match(
+  profileSource,
+  /onDelete=\{\(\) => deletePerson\(\{ skipConfirm: true \}\)\}/,
+  "EditPersonModal should rely on its own confirmation and avoid a second prompt",
 );

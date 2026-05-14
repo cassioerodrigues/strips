@@ -203,8 +203,16 @@ function Profile({ personId, onBack, onPersonClick }) {
     return runMutation(() => window.useTree.actions.updatePerson(p.id, form));
   }
 
-  function deletePerson() {
-    return runMutation(() => window.useTree.actions.deletePerson(p.id)).then(onBack);
+  function deletePerson(options) {
+    const opts = options || {};
+    if (!opts.skipConfirm) {
+      const name = [p.first, p.last].filter(Boolean).join(" ") || "esta pessoa";
+      if (!window.confirm(`Excluir ${name} da árvore? Esta ação não pode ser desfeita.`)) return Promise.resolve();
+    }
+    return runMutation(() => window.useTree.actions.deletePerson(p.id)).then(() => {
+      setEditOpen(false);
+      onBack();
+    });
   }
 
   function saveEvent(form) {
@@ -273,12 +281,15 @@ function Profile({ personId, onBack, onPersonClick }) {
           <button className="btn btn-ghost"><Icon name="share" size={14}/>Compartilhar</button>
           {canEdit && <button className="btn btn-ghost" onClick={() => setEditOpen(true)}><Icon name="edit" size={14}/>Editar</button>}
           {canEdit && <button className="btn btn-primary" onClick={() => setEventOpen(true)}><Icon name="plus" size={14}/>Adicionar evento</button>}
+          {canEdit && <button className="btn btn-ghost btn-danger-soft" onClick={() => deletePerson()} disabled={mutation.saving}>
+            <Icon name="trash" size={14}/>{mutation.saving ? "Excluindo..." : "Excluir"}
+          </button>}
           {window.EditPersonModal && <window.EditPersonModal
             open={editOpen}
             person={p}
             onClose={() => setEditOpen(false)}
             onSave={savePerson}
-            onDelete={deletePerson}
+            onDelete={() => deletePerson({ skipConfirm: true })}
             saving={mutation.saving}
             error={mutation.error}
             readOnly={!canEdit}

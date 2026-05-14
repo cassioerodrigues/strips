@@ -41,6 +41,7 @@ class TreeMembershipOut(BaseModel):
     tree: TreeOut
     role: TreeRole
     joined_at: datetime | None = None
+    person_id: uuid.UUID | None = None
 
 
 # ---------------------------------------------------------------------------

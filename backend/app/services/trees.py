@@ -45,6 +45,7 @@ def get_me(conn: Connection, user_sub: uuid.UUID) -> MeResponse:
             SELECT
                 tm.role,
                 tm.joined_at,
+                tm.person_id,
                 t.id          AS tree_id,
                 t.owner_id    AS tree_owner_id,
                 t.name        AS tree_name,
@@ -75,6 +76,7 @@ def get_me(conn: Connection, user_sub: uuid.UUID) -> MeResponse:
                 tree=tree,
                 role=row["role"],
                 joined_at=row["joined_at"],
+                person_id=row.get("person_id"),
             )
         )
 

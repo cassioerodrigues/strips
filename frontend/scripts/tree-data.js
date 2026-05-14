@@ -31,6 +31,7 @@
     tree: null,
     role: null,
     canEdit: false,
+    myPersonId: null,
     people: [],
     peopleById: {},
     unions: [],
@@ -115,6 +116,11 @@
     return auth.trees[0] || null;
   }
 
+  function myPersonIdFromAuth(auth) {
+    var membership = activeMembership(auth);
+    return membership && membership.person_id ? membership.person_id : null;
+  }
+
   function roleFromAuth(auth) {
     const membership = activeMembership(auth);
     return membership && membership.role ? membership.role : null;
@@ -139,7 +145,8 @@
     loadKey = key;
     loadInFlight = true;
     const role = roleFromAuth(auth);
-    setState({ status: "loading", treeId: treeId, role: role, canEdit: canEditRole(role), error: null });
+    const myPid = myPersonIdFromAuth(auth);
+    setState({ status: "loading", treeId: treeId, role: role, canEdit: canEditRole(role), myPersonId: myPid, error: null });
 
     const adapt = window.adapters || {};
     const api = window.api;
@@ -286,6 +293,7 @@
         tree: null,
         role: roleFromAuth(auth),
         canEdit: canEditRole(roleFromAuth(auth)),
+        myPersonId: myPersonIdFromAuth(auth),
         people: [],
         peopleById: {},
         unions: [],

@@ -15,11 +15,12 @@ from psycopg import Connection
 
 from app.auth import Claims
 from app.deps import get_current_user, get_db_authenticated
-from app.schemas.member import MemberInvite, MemberOut, MemberUpdate
+from app.schemas.member import MemberInvite, MemberOut, MemberSetPerson, MemberUpdate
 from app.services.members import (
     invite_member,
     list_members,
     remove_member,
+    set_my_person,
     update_member_role,
 )
 
@@ -90,3 +91,17 @@ def delete_member_endpoint(
 ) -> None:
     """Remove um membro (owner-only via RLS). Owner não pode remover a si mesmo."""
     remove_member(conn, tree_id, user_id, user.sub)
+
+
+@router.patch(
+    "/api/trees/{tree_id}/members/me/person",
+    response_model=MemberOut,
+)
+def set_my_person_endpoint(
+    tree_id: uuid.UUID,
+    payload: MemberSetPerson,
+    user: Claims = Depends(get_current_user),
+    conn: Connection = Depends(get_db_authenticated),
+) -> MemberOut:
+    """Define qual person o usuário autenticado representa nesta árvore."""
+    return set_my_person(conn, tree_id, user.sub, payload)

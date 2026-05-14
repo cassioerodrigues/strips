@@ -17,7 +17,7 @@ from fastapi import HTTPException, status
 from psycopg import Connection
 from psycopg.rows import dict_row
 
-from app.schemas.member import MemberInvite, MemberOut, MemberUpdate
+from app.schemas.member import MemberInvite, MemberOut, MemberSetPerson, MemberUpdate
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,8 @@ def list_members(conn: Connection, tree_id: uuid.UUID) -> list[MemberOut]:
                 p.display_name  AS display_name,
                 p.avatar_url    AS avatar_url,
                 tm.role         AS role,
-                tm.joined_at    AS joined_at
+                tm.joined_at    AS joined_at,
+                tm.person_id    AS person_id
             FROM tree_members tm
             JOIN profiles p ON p.id = tm.user_id
             WHERE tm.tree_id = %s
@@ -114,6 +115,7 @@ def invite_member(
         avatar_url=profile["avatar_url"],
         role=inserted["role"],
         joined_at=inserted["joined_at"],
+        person_id=inserted.get("person_id"),
     )
 
 
@@ -148,7 +150,7 @@ def update_member_role(
             UPDATE tree_members
             SET role = %s
             WHERE tree_id = %s AND user_id = %s
-            RETURNING user_id, role, joined_at
+            RETURNING user_id, role, joined_at, person_id
             """,
             (payload.role, tree_id, user_id),
         )
@@ -172,6 +174,7 @@ def update_member_role(
         avatar_url=profile["avatar_url"],
         role=updated["role"],
         joined_at=updated["joined_at"],
+        person_id=updated.get("person_id"),
     )
 
 
@@ -204,3 +207,49 @@ def remove_member(
         )
         if cur.rowcount == 0:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+
+
+# ---------------------------------------------------------------------------
+# Set person_id (self-service: any member can set their own person)
+# ---------------------------------------------------------------------------
+
+
+def set_my_person(
+    conn: Connection,
+    tree_id: uuid.UUID,
+    caller_sub: uuid.UUID,
+    payload: MemberSetPerson,
+) -> MemberOut:
+    """Define qual person o usuário autenticado representa nesta árvore."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            UPDATE tree_members
+            SET person_id = %s
+            WHERE tree_id = %s AND user_id = %s
+            RETURNING user_id, role, joined_at, person_id
+            """,
+            (payload.person_id, tree_id, caller_sub),
+        )
+        updated = cur.fetchone()
+
+    if updated is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "You are not a member of this tree")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT display_name, avatar_url FROM profiles WHERE id = %s",
+            (caller_sub,),
+        )
+        profile = cur.fetchone()
+
+    assert profile is not None
+
+    return MemberOut(
+        user_id=updated["user_id"],
+        display_name=profile["display_name"],
+        avatar_url=profile["avatar_url"],
+        role=updated["role"],
+        joined_at=updated["joined_at"],
+        person_id=updated.get("person_id"),
+    )

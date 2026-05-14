@@ -39,6 +39,12 @@ class MemberUpdate(BaseModel):
     role: AssignableRole
 
 
+class MemberSetPerson(BaseModel):
+    """Body de PATCH /api/trees/{tree_id}/members/me/person."""
+
+    person_id: uuid.UUID | None = None
+
+
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
@@ -54,3 +60,4 @@ class MemberOut(BaseModel):
     avatar_url: str | None = None
     role: Literal["owner", "editor", "viewer"]
     joined_at: datetime | None = None
+    person_id: uuid.UUID | None = None

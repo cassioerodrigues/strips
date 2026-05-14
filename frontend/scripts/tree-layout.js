@@ -1099,25 +1099,24 @@
         }
       });
 
-      // Draw parent-to-children connections
-      // Only for root and child families that have both parents and children
-      if ((family.type === FAMILY_TYPE_ROOT || family.type === FAMILY_TYPE_CHILD) &&
-          family.parents.length > 0 && family.children.length > 0) {
-        var parentUnit = family.parents[0];
-        if (!parentUnit || !parentUnit.nodes.length) return;
+      // Draw parent-to-children connections for ALL family types
+      if (family.parents.length > 0 && family.children.length > 0) {
+        // Iterate over each parent unit (PARENT families can have multiple)
+        family.parents.forEach(function (parentUnit) {
+          if (!parentUnit || !parentUnit.nodes.length) return;
 
-        // Find parent nodes positions
-        var parentPositions = parentUnit.nodes.map(function (n) { return layoutNodes[n.id]; }).filter(Boolean);
-        if (parentPositions.length === 0) return;
+          // Find parent nodes positions
+          var parentPositions = parentUnit.nodes.map(function (n) { return layoutNodes[n.id]; }).filter(Boolean);
+          if (parentPositions.length === 0) return;
 
-        var parentMidX = parentPositions.reduce(function (s, p) { return s + p.x + NODE_W / 2; }, 0) / parentPositions.length;
-        var parentMidY = parentPositions[0].y + NODE_H / 2;
-        var parentBottomY = parentPositions[0].y + NODE_H;
-        var isCouple = parentPositions.length === 2;
+          var parentMidX = parentPositions.reduce(function (s, p) { return s + p.x + NODE_W / 2; }, 0) / parentPositions.length;
+          var parentMidY = parentPositions[0].y + NODE_H / 2;
+          var parentBottomY = parentPositions[0].y + NODE_H;
+          var isCouple = parentPositions.length === 2;
 
-        // Find child node positions (only those whose parents match)
-        var parentIds = parentUnit.nodes.map(prop("id"));
-        var childPositions = [];
+          // Find child node positions (only those whose parents match)
+          var parentIds = parentUnit.nodes.map(prop("id"));
+          var childPositions = [];
         family.children.forEach(function (cUnit) {
           cUnit.nodes.forEach(function (node) {
             if (node.parents.some(withIds(parentIds))) {
@@ -1164,7 +1163,28 @@
             toChild: true,
           });
         });
+        }); // end parentUnit forEach
       }
+    });
+
+    // Catch-all: draw any union links not yet drawn
+    // (handles spouses placed in separate family units, e.g. multiple marriages)
+    (unions || []).forEach(function (union) {
+      var aId = union.partner_a_id || union.partnerAId || union.partner_a || union.partnerA;
+      var bId = union.partner_b_id || union.partnerBId || union.partner_b || union.partnerB;
+      if (!aId || !bId) return;
+      var key = [aId, bId].sort().join("|");
+      if (drawnUnions[key]) return;
+      var posA = layoutNodes[aId], posB = layoutNodes[bId];
+      if (!posA || !posB) return;
+      drawnUnions[key] = true;
+      links.push({
+        type: "union",
+        fromX: Math.min(posA.x, posB.x) + NODE_W,
+        fromY: posA.y + NODE_H / 2,
+        toX: Math.max(posA.x, posB.x),
+        toY: posB.y + NODE_H / 2,
+      });
     });
   }
 

@@ -50,16 +50,21 @@
       first: first,
       last: last,
       maiden: p.maiden_name || "",
+      maidenName: p.maiden_name || "",
       displayName: p.display_name || (first + (last ? " " + last : "")).trim(),
       sex: p.sex || "U",
       isLiving: p.is_living !== false,
       birth: {
         year: p.birth_year || null,
+        month: p.birth_month || null,
+        day: p.birth_day || null,
         place: p.birth_place || "",
       },
       death: hasDeath
         ? {
             year: p.death_year || null,
+            month: p.death_month || null,
+            day: p.death_day || null,
             place: p.death_place || "",
             cause: p.death_cause || "",
           }

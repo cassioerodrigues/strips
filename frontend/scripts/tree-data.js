@@ -456,7 +456,7 @@
         }
         return undefined;
       },
-      [effectiveId, skip],
+      [effectiveId, skip, liveSnap.status],
     );
 
     if (mock) return { status: "fallback", person: null, relations: null, error: null };
@@ -475,13 +475,33 @@
     }
   }
 
-  async function mutateAndRefresh(mutation, affectedPersonId) {
+  function invalidateAllPersons() {
+    Array.from(personCache.keys()).forEach(invalidatePerson);
+  }
+
+  function normalizeAffectedPersonIds(ids) {
+    if (!ids) return [];
+    const raw = Array.isArray(ids) ? ids : [ids];
+    return raw.filter(Boolean).filter(function (id, index, arr) {
+      return arr.indexOf(id) === index;
+    });
+  }
+
+  function unionPersonIds(unionId) {
+    const union = (state.unions || []).find(function (u) {
+      return u && u.id === unionId;
+    });
+    return union ? [union.partner_a_id, union.partner_b_id] : [];
+  }
+
+  async function mutateAndRefresh(mutation, affectedPersonIds) {
     if (!state.canEdit) {
       throw new Error("Visualizadores não podem editar esta árvore.");
     }
     const result = await mutation();
-    if (affectedPersonId) invalidatePerson(affectedPersonId);
+    normalizeAffectedPersonIds(affectedPersonIds).forEach(invalidatePerson);
     await refetch();
+    invalidateAllPersons();
     return result;
   }
 
@@ -489,7 +509,7 @@
     createPerson: function (form) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.createPersonWithRelation(state.treeId, form);
-      }, form && form.relTo);
+      }, [form && form.relTo, form && form.spouseId]);
     },
     updatePerson: function (personId, form) {
       return mutateAndRefresh(function () {
@@ -504,7 +524,7 @@
     removeParent: function (childId, parentId) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.removeParent(childId, parentId);
-      }, childId);
+      }, [childId, parentId]);
     },
     addEvent: function (personId, form) {
       return mutateAndRefresh(function () {
@@ -518,7 +538,7 @@
           state.treeId,
           window.genealogyApi.eventPayloadFromForm(form, personId, null),
         );
-      }, personId);
+      }, [personId, form && form.marriageWith]);
     },
     updateEvent: function (personId, eventId, form) {
       return mutateAndRefresh(function () {
@@ -528,7 +548,7 @@
     updateUnion: function (personId, unionId, payload) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.updateUnion(unionId, payload);
-      }, personId);
+      }, [personId].concat(unionPersonIds(unionId)));
     },
     deleteEvent: function (personId, eventId) {
       return mutateAndRefresh(function () {
@@ -538,7 +558,7 @@
     deleteUnion: function (personId, unionId) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.deleteUnion(unionId);
-      }, personId);
+      }, [personId].concat(unionPersonIds(unionId)));
     },
   };
 

@@ -8,6 +8,7 @@ COPY . /usr/share/nginx/html
 RUN mkdir -p /etc/strips \
  && mv /usr/share/nginx/html/config.js.template /etc/strips/config.js.template \
  && mv /usr/share/nginx/html/docker-entrypoint.sh /docker-entrypoint-stirps.sh \
+ && sed -i 's/\r$//' /docker-entrypoint-stirps.sh \
  && chmod +x /docker-entrypoint-stirps.sh \
  && rm -f /usr/share/nginx/html/Dockerfile /usr/share/nginx/html/nginx.conf
 

@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    image: stirps-backend:local
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-stirps-media}
+      CORS_ORIGINS: ${DOCKER_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+    ports:
+      - "8001:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    image: stirps-frontend:local
+    environment:
+      STIRPS_API_BASE_URL: ${DOCKER_STIRPS_API_BASE_URL:-http://localhost:8001/api}
+      STIRPS_SUPABASE_URL: ${STIRPS_SUPABASE_URL:-}
+      STIRPS_SUPABASE_ANON_KEY: ${STIRPS_SUPABASE_ANON_KEY:-}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend

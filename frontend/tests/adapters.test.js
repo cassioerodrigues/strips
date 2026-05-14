@@ -50,3 +50,31 @@ assert.deepEqual(plain(person.death), {
   place: "Sao Paulo",
   cause: "natural",
 });
+
+assert.deepEqual(plain(context.window.adapters.adaptMedia({
+  id: "media-1",
+  tree_id: "tree-1",
+  kind: "photo",
+  storage_path: "tree_tree-1/person/person-1/file.jpg",
+  mime_type: "image/jpeg",
+  size_bytes: 1234,
+  title: "Retrato",
+  uploaded_by: "user-1",
+  download_url: null,
+})), {
+  id: "media-1",
+  treeId: "tree-1",
+  kind: "photo",
+  storagePath: "tree_tree-1/person/person-1/file.jpg",
+  mimeType: "image/jpeg",
+  sizeBytes: 1234,
+  title: "Retrato",
+  description: "",
+  takenYear: null,
+  takenMonth: null,
+  takenDay: null,
+  takenPlace: "",
+  uploadedBy: "user-1",
+  uploadedAt: null,
+  downloadUrl: null,
+});

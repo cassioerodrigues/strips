@@ -105,6 +105,143 @@
     return window.api.fetch(path, options);
   }
 
+  class MediaStepError extends Error {
+    constructor(step, message, cause) {
+      super(message);
+      this.name = "MediaStepError";
+      this.step = step;
+      this.cause = cause || null;
+    }
+  }
+
+  function mediaKindFromFile(file) {
+    const mime = (file && file.type) || "";
+    if (mime.indexOf("image/") === 0) return "photo";
+    if (mime.indexOf("audio/") === 0) return "audio";
+    if (mime.indexOf("video/") === 0) return "video";
+    if (mime === "application/pdf" || mime.indexOf("text/") === 0) return "document";
+    return "other";
+  }
+
+  function mediaTitleFromFile(file) {
+    const name = (file && file.name) || "Arquivo";
+    return name.replace(/\.[^.]+$/, "") || name;
+  }
+
+  function stepMessage(step, e) {
+    const detail = e && e.message ? e.message : String(e || "");
+    if (step === "upload-url") return "Nao foi possivel criar a URL assinada de upload. " + detail;
+    if (step === "storage-upload") return "Nao foi possivel enviar o arquivo ao Storage. " + detail;
+    if (step === "metadata") return "O arquivo foi enviado, mas a metadata nao foi registrada. " + detail;
+    if (step === "delete") return "Nao foi possivel remover a midia. " + detail;
+    if (step === "download-url") return "Nao foi possivel assinar a URL de download. " + detail;
+    return detail || "Falha na operacao de midia.";
+  }
+
+  async function requestMediaUploadUrl(treeId, file, entityType, entityId) {
+    try {
+      return await apiFetch("/trees/" + treeId + "/media/upload-url", {
+        method: "POST",
+        body: {
+          filename: file && file.name ? file.name : "file",
+          mime_type: (file && file.type) || "application/octet-stream",
+          entity_type: entityType || "person",
+          entity_id: entityId,
+        },
+      });
+    } catch (e) {
+      throw new MediaStepError("upload-url", stepMessage("upload-url", e), e);
+    }
+  }
+
+  async function uploadFileToSignedUrl(url, file) {
+    let response;
+    try {
+      response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": (file && file.type) || "application/octet-stream",
+        },
+        body: file,
+      });
+    } catch (e) {
+      throw new MediaStepError("storage-upload", stepMessage("storage-upload", e), e);
+    }
+    if (!response.ok) {
+      let detail = response.statusText || "HTTP " + response.status;
+      try {
+        const text = await response.text();
+        if (text) detail = text;
+      } catch (_) {}
+      throw new MediaStepError("storage-upload", stepMessage("storage-upload", new Error(detail)), null);
+    }
+    return true;
+  }
+
+  async function registerMediaMetadata(treeId, file, storagePath, overrides) {
+    const patch = overrides || {};
+    try {
+      return await apiFetch("/trees/" + treeId + "/media", {
+        method: "POST",
+        body: {
+          tree_id: treeId,
+          kind: patch.kind || mediaKindFromFile(file),
+          storage_path: storagePath,
+          mime_type: (file && file.type) || "application/octet-stream",
+          size_bytes: file && typeof file.size === "number" ? file.size : null,
+          title: patch.title || mediaTitleFromFile(file),
+          description: patch.description || null,
+          taken_year: patch.taken_year || null,
+          taken_month: patch.taken_month || null,
+          taken_day: patch.taken_day || null,
+          taken_place: patch.taken_place || null,
+        },
+      });
+    } catch (e) {
+      throw new MediaStepError("metadata", stepMessage("metadata", e), e);
+    }
+  }
+
+  async function linkPersonMedia(personId, mediaId, isPrimary) {
+    return apiFetch("/people/" + personId + "/media/" + mediaId, {
+      method: "POST",
+      body: { is_primary: !!isPrimary },
+    });
+  }
+
+  async function uploadPersonMedia(treeId, personId, file, options) {
+    const opts = options || {};
+    const signed = await requestMediaUploadUrl(treeId, file, "person", personId);
+    await uploadFileToSignedUrl(signed.url, file);
+    const media = await registerMediaMetadata(treeId, file, signed.storage_path, opts);
+    try {
+      await linkPersonMedia(personId, media.id, !!opts.isPrimary);
+    } catch (e) {
+      throw new MediaStepError("metadata", stepMessage("metadata", e), e);
+    }
+    return media;
+  }
+
+  async function listPersonMedia(personId) {
+    return apiFetch("/people/" + personId + "/media", { method: "GET" });
+  }
+
+  async function getMediaDownloadUrl(mediaId) {
+    try {
+      return await apiFetch("/media/" + mediaId + "/download-url", { method: "GET" });
+    } catch (e) {
+      throw new MediaStepError("download-url", stepMessage("download-url", e), e);
+    }
+  }
+
+  async function deleteMedia(mediaId) {
+    try {
+      return await apiFetch("/media/" + mediaId, { method: "DELETE" });
+    } catch (e) {
+      throw new MediaStepError("delete", stepMessage("delete", e), e);
+    }
+  }
+
   async function addParent(childId, parentId, kind) {
     if (!childId || !parentId) return null;
     return apiFetch("/people/" + childId + "/parents", {
@@ -197,5 +334,15 @@
     createEvent: createEvent,
     updateEvent: updateEvent,
     deleteEvent: deleteEvent,
+    MediaStepError: MediaStepError,
+    mediaKindFromFile: mediaKindFromFile,
+    requestMediaUploadUrl: requestMediaUploadUrl,
+    uploadFileToSignedUrl: uploadFileToSignedUrl,
+    registerMediaMetadata: registerMediaMetadata,
+    linkPersonMedia: linkPersonMedia,
+    uploadPersonMedia: uploadPersonMedia,
+    listPersonMedia: listPersonMedia,
+    getMediaDownloadUrl: getMediaDownloadUrl,
+    deleteMedia: deleteMedia,
   };
 })();

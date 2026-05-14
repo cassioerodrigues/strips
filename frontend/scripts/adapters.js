@@ -175,11 +175,33 @@
     };
   }
 
+  function adaptMedia(item) {
+    if (!item) return null;
+    return {
+      id: item.id,
+      treeId: item.tree_id,
+      kind: item.kind || "other",
+      storagePath: item.storage_path || "",
+      mimeType: item.mime_type || "",
+      sizeBytes: item.size_bytes || 0,
+      title: item.title || "",
+      description: item.description || "",
+      takenYear: item.taken_year || null,
+      takenMonth: item.taken_month || null,
+      takenDay: item.taken_day || null,
+      takenPlace: item.taken_place || "",
+      uploadedBy: item.uploaded_by || null,
+      uploadedAt: item.uploaded_at || null,
+      downloadUrl: item.download_url || null,
+    };
+  }
+
   window.adapters = {
     adaptPerson: adaptPerson,
     adaptRelations: adaptRelations,
     adaptStats: adaptStats,
     adaptTimelineItem: adaptTimelineItem,
     adaptEvent: adaptEvent,
+    adaptMedia: adaptMedia,
   };
 })();

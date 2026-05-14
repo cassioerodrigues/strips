@@ -14,12 +14,59 @@ function Profile({ personId, onBack, onPersonClick }) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [eventOpen, setEventOpen] = React.useState(false);
   const [mutation, setMutation] = React.useState({ saving: false, error: null });
+  const [mediaState, setMediaState] = React.useState({ loading: false, items: [], error: null, action: null });
+  const photoInputRef = React.useRef(null);
+  const docInputRef = React.useRef(null);
 
   const useApi = personHook.status === "ready";
+  const mediaPersonId = useApi && personHook.person ? personHook.person.id : null;
   const useFamily =
     personHook.status === "fallback" ||
     personHook.status === "unavailable" ||
     (personHook.status === "idle" && (!personId || (typeof personId === "string" && personId.indexOf("p_") === 0)));
+
+  async function refreshPersonMedia() {
+    if (!mediaPersonId || !window.genealogyApi) return;
+    const adapt = window.adapters || {};
+    setMediaState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const raw = await window.genealogyApi.listPersonMedia(mediaPersonId);
+      const items = (Array.isArray(raw) ? raw : [])
+        .map(adapt.adaptMedia || (x => x))
+        .filter(Boolean);
+      const signedItems = await Promise.all(items.map(async item => {
+        try {
+          const signed = await window.genealogyApi.getMediaDownloadUrl(item.id);
+          return { ...item, downloadUrl: signed && signed.url ? signed.url : null, downloadError: null };
+        } catch (e) {
+          return { ...item, downloadUrl: null, downloadError: (e && e.message) || "Falha ao assinar download." };
+        }
+      }));
+      const signErrors = signedItems.filter(item => item.downloadError).length;
+      setMediaState(prev => ({
+        ...prev,
+        loading: false,
+        items: signedItems,
+        error: signErrors ? "Algumas midias foram carregadas, mas nao puderam gerar URL de download." : null,
+      }));
+    } catch (e) {
+      setMediaState(prev => ({
+        ...prev,
+        loading: false,
+        items: [],
+        error: (e && e.message) || "Nao foi possivel carregar as midias desta pessoa.",
+      }));
+    }
+  }
+
+  React.useEffect(() => {
+    if (!mediaPersonId) {
+      setMediaState({ loading: false, items: [], error: null, action: null });
+      return undefined;
+    }
+    refreshPersonMedia();
+    return undefined;
+  }, [mediaPersonId]);
 
   if (personHook.status === "loading" || (personHook.status === "idle" && !useFamily)) {
     return (
@@ -86,11 +133,59 @@ function Profile({ personId, onBack, onPersonClick }) {
   const readOnlyReason = tree.role === "viewer"
     ? "Visualizadores não podem editar esta árvore."
     : "Somente leitura.";
+  const mediaItems = mediaState.items || [];
+  const photoMedia = mediaItems.filter(item =>
+    item.kind === "photo" || (item.mimeType && item.mimeType.indexOf("image/") === 0)
+  );
+  const documentMedia = mediaItems.filter(item =>
+    item.kind !== "photo" && !(item.mimeType && item.mimeType.indexOf("image/") === 0)
+  );
 
   function friendlyError(e) {
     if (e && e.status === 403) return "Você não tem permissão para alterar esta árvore.";
     if (e && e.status === 422) return "Alguns campos não foram aceitos pela API. Revise os dados e tente novamente.";
     return (e && e.message) || "Não foi possível salvar a alteração.";
+  }
+
+  async function uploadMediaFile(file, preferredKind) {
+    if (!file || !mediaPersonId || !tree.treeId || !window.genealogyApi) return;
+    setMediaState(prev => ({ ...prev, action: "upload", error: null }));
+    try {
+      await window.genealogyApi.uploadPersonMedia(tree.treeId, mediaPersonId, file, {
+        kind: preferredKind || window.genealogyApi.mediaKindFromFile(file),
+      });
+      await refreshPersonMedia();
+      if (window.useTree && window.useTree.refetch) window.useTree.refetch();
+      setMediaState(prev => ({ ...prev, action: null, error: null }));
+    } catch (e) {
+      setMediaState(prev => ({
+        ...prev,
+        action: null,
+        error: (e && e.message) || "Nao foi possivel enviar a midia.",
+      }));
+    }
+  }
+
+  async function deleteMediaItem(media) {
+    if (!media || !media.id || !window.genealogyApi) return;
+    if (!window.confirm("Remover esta midia do acervo?")) return;
+    setMediaState(prev => ({ ...prev, action: "delete:" + media.id, error: null }));
+    try {
+      await window.genealogyApi.deleteMedia(media.id);
+      setMediaState(prev => ({
+        ...prev,
+        action: null,
+        items: prev.items.filter(item => item.id !== media.id),
+        error: null,
+      }));
+      if (window.useTree && window.useTree.refetch) window.useTree.refetch();
+    } catch (e) {
+      setMediaState(prev => ({
+        ...prev,
+        action: null,
+        error: (e && e.message) || "Nao foi possivel remover a midia.",
+      }));
+    }
   }
 
   async function runMutation(fn) {
@@ -308,6 +403,55 @@ function Profile({ personId, onBack, onPersonClick }) {
 
           {tab === "docs" && (
             <Card padding={28}>
+              {useApi ? (
+                <>
+                  <MediaPanelHeader
+                    title="Documentos arquivados"
+                    canEdit={canEdit}
+                    loading={mediaState.loading || mediaState.action === "upload"}
+                    onUpload={() => docInputRef.current && docInputRef.current.click()}
+                  />
+                  <input
+                    ref={docInputRef}
+                    type="file"
+                    className="media-hidden-input"
+                    onChange={e => {
+                      const file = e.target.files && e.target.files[0];
+                      e.target.value = "";
+                      uploadMediaFile(file, file && file.type && file.type.indexOf("image/") === 0 ? "photo" : "document");
+                    }}
+                  />
+                  <MediaStatus state={mediaState}/>
+                  <div className="docgrid media-docgrid">
+                    {documentMedia.length === 0 && !mediaState.loading && (
+                      <div className="media-empty">Nenhum documento vinculado a este perfil.</div>
+                    )}
+                    {documentMedia.map(item => (
+                      <div key={item.id} className="doc-card media-card">
+                        <button
+                          className="doc-thumb doc-thumb-beige media-doc-open"
+                          disabled={!item.downloadUrl}
+                          onClick={() => item.downloadUrl && window.open(item.downloadUrl, "_blank", "noopener")}
+                          title={item.downloadError || "Abrir documento"}
+                        >
+                          <Icon name="doc" size={22}/>
+                        </button>
+                        <div className="doc-meta">
+                          <div className="doc-title">{item.title || "Documento"}</div>
+                          <div className="doc-sub">{mediaKindLabel(item)} · {formatFileSize(item.sizeBytes)}</div>
+                          <MediaCardActions
+                            item={item}
+                            canEdit={canEdit}
+                            deleting={mediaState.action === "delete:" + item.id}
+                            onDelete={deleteMediaItem}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="eyebrow">Documentos arquivados</div>
               <div className="docgrid">
                 {[
@@ -325,11 +469,57 @@ function Profile({ personId, onBack, onPersonClick }) {
                   </div>
                 ))}
               </div>
+                </>
+              )}
             </Card>
           )}
 
           {tab === "photos" && (
             <Card padding={28}>
+              {useApi ? (
+                <>
+                  <MediaPanelHeader
+                    title="Galeria de fotos antigas"
+                    canEdit={canEdit}
+                    loading={mediaState.loading || mediaState.action === "upload"}
+                    onUpload={() => photoInputRef.current && photoInputRef.current.click()}
+                  />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="media-hidden-input"
+                    onChange={e => {
+                      const file = e.target.files && e.target.files[0];
+                      e.target.value = "";
+                      uploadMediaFile(file, "photo");
+                    }}
+                  />
+                  <MediaStatus state={mediaState}/>
+                  <div className="photogrid">
+                    {photoMedia.length === 0 && !mediaState.loading && (
+                      <div className="media-empty media-empty-wide">Nenhuma foto vinculada a este perfil.</div>
+                    )}
+                    {photoMedia.map(item => (
+                      <div key={item.id} className="photo-tile media-photo-tile">
+                        {item.downloadUrl ? (
+                          <img src={item.downloadUrl} alt={item.title || "Foto do perfil"}/>
+                        ) : (
+                          <div className="media-photo-unavailable"><Icon name="doc" size={20}/></div>
+                        )}
+                        <div className="photo-cap">{item.takenYear || item.title || "Foto"}</div>
+                        <MediaCardActions
+                          item={item}
+                          canEdit={canEdit}
+                          deleting={mediaState.action === "delete:" + item.id}
+                          onDelete={deleteMediaItem}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="eyebrow">Galeria de fotos antigas</div>
               <div className="photogrid">
                 {Array.from({length: 8}).map((_, i) => (
@@ -338,6 +528,8 @@ function Profile({ personId, onBack, onPersonClick }) {
                   </div>
                 ))}
               </div>
+                </>
+              )}
             </Card>
           )}
 
@@ -480,6 +672,64 @@ function RelationGroup({ label, people, onPersonClick, action = null }) {
       </div>
     </div>
   );
+}
+
+function MediaPanelHeader({ title, canEdit, loading, onUpload }) {
+  return (
+    <div className="media-panel-head">
+      <div className="eyebrow">{title}</div>
+      {canEdit && (
+        <button className="btn btn-sm btn-primary" onClick={onUpload} disabled={loading}>
+          <Icon name="upload" size={13}/>{loading ? "Enviando..." : "Enviar arquivo"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MediaStatus({ state }) {
+  if (!state || (!state.loading && !state.error)) return null;
+  return (
+    <div className={state.error ? "media-status media-status-error" : "media-status"}>
+      {state.error || "Carregando midias..."}
+    </div>
+  );
+}
+
+function MediaCardActions({ item, canEdit, deleting, onDelete }) {
+  return (
+    <div className="media-card-actions">
+      {item.downloadUrl ? (
+        <button className="link" onClick={() => window.open(item.downloadUrl, "_blank", "noopener")}>
+          Abrir
+        </button>
+      ) : (
+        <span className="media-card-error">{item.downloadError || "Download indisponivel"}</span>
+      )}
+      {canEdit && (
+        <button className="link media-delete" onClick={() => onDelete(item)} disabled={deleting}>
+          {deleting ? "Removendo..." : "Remover"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function mediaKindLabel(item) {
+  if (!item) return "Midia";
+  if (item.kind === "photo") return "Foto";
+  if (item.kind === "document") return "Documento";
+  if (item.kind === "audio") return "Audio";
+  if (item.kind === "video") return "Video";
+  return "Arquivo";
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes || 0);
+  if (!Number.isFinite(n) || n <= 0) return "tamanho desconhecido";
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
+  return (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1024 ? 0 : 1) + " MB";
 }
 
 function buildPersonEvents(p, F) {

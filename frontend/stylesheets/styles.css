@@ -821,6 +821,53 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
 .doc-meta { padding: 10px 12px; }
 .doc-title { font-size: 12.5px; font-weight: 550; }
 .doc-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.media-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.media-hidden-input { display: none; }
+.media-status {
+  margin: 8px 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.media-status-error {
+  color: #9d3f24;
+  background: rgba(182,81,42,0.08);
+  border: 1px solid rgba(182,81,42,0.16);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+.media-empty {
+  grid-column: 1 / -1;
+  padding: 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  color: var(--muted);
+  font-size: 13px;
+}
+.media-empty-wide { min-height: 120px; }
+.media-doc-open {
+  width: 100%;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.media-doc-open:disabled { cursor: not-allowed; opacity: 0.55; }
+.media-card-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+.media-delete { color: #b6512a; }
+.media-card-error { color: #9d3f24; }
 
 /* photos */
 .photogrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px; }
@@ -842,6 +889,32 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
   color: rgba(40,30,15,0.65);
   background: rgba(255,253,245,0.7);
   padding: 1px 6px; border-radius: 3px;
+}
+.media-photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.media-photo-tile .media-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  justify-content: flex-end;
+}
+.media-photo-tile .media-card-actions .link {
+  background: rgba(255,253,245,0.84);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.media-photo-unavailable {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: var(--beige-soft);
 }
 
 /* places */

@@ -10,13 +10,24 @@ const source = fs.readFileSync(
 
 function loadApi() {
   const calls = [];
+  const storageCalls = [];
   const context = {
+    fetch(url, options) {
+      storageCalls.push({ url, options });
+      return Promise.resolve({ ok: true, status: 200, statusText: "OK", text: () => Promise.resolve("") });
+    },
     window: {
       api: {
         fetch(path, options) {
           calls.push({ path, options });
           if (options && options.method === "POST" && path.endsWith("/people")) {
             return Promise.resolve({ id: "person-new", first_name: "Ana" });
+          }
+          if (path.endsWith("/media/upload-url")) {
+            return Promise.resolve({ url: "https://storage.local/upload-token", storage_path: "tree_tree-1/person/person-1/file.jpg" });
+          }
+          if (path.endsWith("/media")) {
+            return Promise.resolve({ id: "media-1", kind: "photo" });
           }
           return Promise.resolve({ id: "ok" });
         },
@@ -25,7 +36,7 @@ function loadApi() {
   };
   vm.createContext(context);
   vm.runInContext(source, context, { filename: "genealogy-api.js" });
-  return { api: context.window.genealogyApi, calls };
+  return { api: context.window.genealogyApi, calls, storageCalls };
 }
 
 function plain(value) {
@@ -33,7 +44,7 @@ function plain(value) {
 }
 
 (async () => {
-  const { api, calls } = loadApi();
+  const { api, calls, storageCalls } = loadApi();
 
   assert.deepEqual(plain(api.personPayloadFromForm({
     first: " Ana ",
@@ -115,4 +126,54 @@ function plain(value) {
     place: null,
     description: null,
   });
+
+  assert.equal(api.mediaKindFromFile({ type: "image/png" }), "photo");
+  assert.equal(api.mediaKindFromFile({ type: "application/pdf" }), "document");
+
+  await api.uploadPersonMedia("tree-1", "person-1", {
+    name: "retrato.jpg",
+    type: "image/jpeg",
+    size: 2048,
+  });
+
+  assert.deepEqual(plain(calls.slice(-3)), [
+    {
+      path: "/trees/tree-1/media/upload-url",
+      options: {
+        method: "POST",
+        body: {
+          filename: "retrato.jpg",
+          mime_type: "image/jpeg",
+          entity_type: "person",
+          entity_id: "person-1",
+        },
+      },
+    },
+    {
+      path: "/trees/tree-1/media",
+      options: {
+        method: "POST",
+        body: {
+          tree_id: "tree-1",
+          kind: "photo",
+          storage_path: "tree_tree-1/person/person-1/file.jpg",
+          mime_type: "image/jpeg",
+          size_bytes: 2048,
+          title: "retrato",
+          description: null,
+          taken_year: null,
+          taken_month: null,
+          taken_day: null,
+          taken_place: null,
+        },
+      },
+    },
+    {
+      path: "/people/person-1/media/media-1",
+      options: { method: "POST", body: { is_primary: false } },
+    },
+  ]);
+  assert.equal(storageCalls[0].url, "https://storage.local/upload-token");
+  assert.equal(storageCalls[0].options.method, "PUT");
+  assert.equal(storageCalls[0].options.headers["Content-Type"], "image/jpeg");
 })();

@@ -153,10 +153,32 @@
   }
 
 
-  function orderGroupsToReduceCrossings(groups, relationsByChild) {
+  function keepPartnersAdjacent(orderedPeople, unionByPersonId) {
+    const row = orderedPeople.slice();
+    Object.keys(unionByPersonId || {}).forEach(function (personId) {
+      const partnerId = unionByPersonId[personId];
+      if (!partnerId || partnerId === personId) return;
+      const i = row.findIndex(function (person) { return person.id === personId; });
+      const j = row.findIndex(function (person) { return person.id === partnerId; });
+      if (i < 0 || j < 0 || Math.abs(i - j) <= 1) return;
+      const partner = row.splice(j, 1)[0];
+      const insertAt = i < j ? i + 1 : i;
+      row.splice(insertAt, 0, partner);
+    });
+    return row;
+  }
+
+  function orderGroupsToReduceCrossings(groups, relationsByChild, unions) {
+    const unionByPersonId = {};
+    (unions || []).forEach(function (union) {
+      const ids = unionPartnerIds(union);
+      if (ids.length !== 2) return;
+      unionByPersonId[ids[0]] = ids[1];
+      unionByPersonId[ids[1]] = ids[0];
+    });
     const parentIndexById = {};
     return groups.map(function (group) {
-      const orderedPeople = group.people.slice().sort(function (a, b) {
+      const orderedPeople = keepPartnersAdjacent(group.people.slice().sort(function (a, b) {
         function score(person) {
           const parentIds = (relationsByChild && relationsByChild[person.id]) || [];
           const indices = parentIds
@@ -175,7 +197,7 @@
         const an = ((a.first || "") + " " + (a.last || "")).trim();
         const bn = ((b.first || "") + " " + (b.last || "")).trim();
         return an.localeCompare(bn);
-      });
+      }), unionByPersonId);
 
       orderedPeople.forEach(function (person, index) {
         parentIndexById[person.id] = index;
@@ -194,6 +216,7 @@
     const groups = orderGroupsToReduceCrossings(
       deriveGenerationGroups(people, unions, relationsByChild),
       relationsByChild,
+      unions,
     );
     const maxCols = Math.max.apply(
       null,

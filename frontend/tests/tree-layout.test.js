@@ -91,3 +91,25 @@ assert.ok(
   crossingLayout.nodes["c-left"].x < crossingLayout.nodes["c-right"].x,
   "children should follow the horizontal order of their parents to reduce crossing lines",
 );
+
+const partnerAdjacencyLayout = context.window.treeLayout.computeApiTreeLayout(
+  [
+    { id: "left", first: "Adir", birth: { year: 1958 } },
+    { id: "mid-a", first: "Olomir", birth: { year: 1964 } },
+    { id: "mid-b", first: "Cintia", birth: { year: 1971 } },
+    { id: "right", first: "Alzira", birth: { year: 1975 } },
+  ],
+  [{ partner_a_id: "mid-a", partner_b_id: "mid-b" }],
+  {},
+);
+
+const sortedByX = Object.values(partnerAdjacencyLayout.nodes)
+  .map((node) => ({ id: node.id, x: node.x }))
+  .sort((a, b) => a.x - b.x)
+  .map((node) => node.id);
+const distance = Math.abs(sortedByX.indexOf("mid-a") - sortedByX.indexOf("mid-b"));
+assert.equal(
+  distance,
+  1,
+  "partners in the same generation should stay adjacent to avoid overlapping lines",
+);

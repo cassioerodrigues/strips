@@ -286,26 +286,64 @@
     const newId = person && person.id;
     if (!newId) return person;
 
-    if (form.relType === "child") {
-      await addParent(newId, form.relTo);
-      await addParent(newId, form.spouseId);
-    } else if (form.relType === "parent") {
-      await addParent(form.relTo, newId);
-    } else if (form.relType === "spouse") {
-      await createUnion(treeId, {
-        partner_a_id: form.relTo,
-        partner_b_id: newId,
+    await createRelationshipLinks(treeId, newId, normalizeRelationshipForm(form));
+    return person;
+  }
+
+  function uniqueIds(ids) {
+    return (Array.isArray(ids) ? ids : [])
+      .filter(Boolean)
+      .filter(function (id, index, arr) { return arr.indexOf(id) === index; });
+  }
+
+  function normalizeRelationshipForm(form) {
+    const normalized = {
+      parentIds: uniqueIds(form && form.parentIds),
+      childIds: uniqueIds(form && form.childIds),
+      spouseIds: uniqueIds(form && form.spouseIds),
+      siblingIds: uniqueIds(form && form.siblingIds),
+    };
+
+    if (form && form.relTo) {
+      if (form.relType === "child") {
+        normalized.parentIds = uniqueIds(normalized.parentIds.concat([form.relTo, form.spouseId]));
+      } else if (form.relType === "parent") {
+        normalized.childIds = uniqueIds(normalized.childIds.concat([form.relTo]));
+      } else if (form.relType === "spouse") {
+        normalized.spouseIds = uniqueIds(normalized.spouseIds.concat([form.relTo]));
+      } else if (form.relType === "sibling") {
+        normalized.siblingIds = uniqueIds(normalized.siblingIds.concat([form.relTo]));
+      }
+    }
+
+    return normalized;
+  }
+
+  async function createRelationshipLinks(treeId, personId, form) {
+    const rel = normalizeRelationshipForm(form || {});
+    await Promise.all(rel.parentIds.map(function (parentId) {
+      return addParent(personId, parentId);
+    }));
+    await Promise.all(rel.childIds.map(function (childId) {
+      return addParent(childId, personId);
+    }));
+    await Promise.all(rel.spouseIds.map(function (spouseId) {
+      if (!spouseId || spouseId === personId) return null;
+      return createUnion(treeId, {
+        partner_a_id: personId,
+        partner_b_id: spouseId,
         type: "marriage",
         status: "ongoing",
       });
-    } else if (form.relType === "sibling") {
-      const relations = await apiFetch("/people/" + form.relTo + "/relations", { method: "GET" });
+    }));
+    await Promise.all(rel.siblingIds.map(async function (siblingId) {
+      if (!siblingId || siblingId === personId) return null;
+      const relations = await apiFetch("/people/" + siblingId + "/relations", { method: "GET" });
       const parents = relations && Array.isArray(relations.parents) ? relations.parents : [];
-      await Promise.all(parents.map(function (parent) {
-        return addParent(newId, parent.id);
+      return Promise.all(parents.map(function (parent) {
+        return addParent(personId, parent.id);
       }));
-    }
-    return person;
+    }));
   }
 
   async function updatePerson(personId, form) {
@@ -324,6 +362,7 @@
     unionPayloadFromForm: unionPayloadFromForm,
     eventPayloadFromForm: eventPayloadFromForm,
     createPersonWithRelation: createPersonWithRelation,
+    createRelationshipLinks: createRelationshipLinks,
     updatePerson: updatePerson,
     deletePerson: deletePerson,
     addParent: addParent,

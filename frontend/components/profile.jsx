@@ -13,6 +13,7 @@ function Profile({ personId, onBack, onPersonClick }) {
   const [tab, setTab] = React.useState("bio");
   const [editOpen, setEditOpen] = React.useState(false);
   const [eventOpen, setEventOpen] = React.useState(false);
+  const [relationOpen, setRelationOpen] = React.useState(false);
   const [mutation, setMutation] = React.useState({ saving: false, error: null });
   const [mediaState, setMediaState] = React.useState({ loading: false, items: [], error: null, action: null });
   const photoInputRef = React.useRef(null);
@@ -219,6 +220,17 @@ function Profile({ personId, onBack, onPersonClick }) {
     return runMutation(() => window.useTree.actions.addEvent(p.id, form));
   }
 
+  function saveRelation(form) {
+    const ids = form && Array.isArray(form.targetIds) ? form.targetIds : [];
+    const relationForm = {
+      parentIds: form && form.relationType === "parent" ? ids : [],
+      childIds: form && form.relationType === "child" ? ids : [],
+      spouseIds: form && form.relationType === "spouse" ? ids : [],
+      siblingIds: form && form.relationType === "sibling" ? ids : [],
+    };
+    return runMutation(() => window.useTree.actions.addRelationships(p.id, relationForm));
+  }
+
   function deleteEvent(eventId) {
     if (!window.confirm("Remover este evento da linha do tempo?")) return;
     return runMutation(() => window.useTree.actions.deleteEvent(p.id, eventId));
@@ -306,6 +318,17 @@ function Profile({ personId, onBack, onPersonClick }) {
             readOnly={!canEdit}
             readOnlyReason={readOnlyReason}
           />}
+          {window.LinkPersonRelationModal && <window.LinkPersonRelationModal
+            open={relationOpen}
+            person={p}
+            people={useApi ? tree.people : Object.values(F.people)}
+            onClose={() => setRelationOpen(false)}
+            onSave={saveRelation}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
         </div>
       </div>
 
@@ -348,7 +371,14 @@ function Profile({ personId, onBack, onPersonClick }) {
 
           {tab === "family" && (
             <Card padding={28}>
-              <div className="eyebrow">Relacionamentos familiares</div>
+              <div className="media-panel-head">
+                <div className="eyebrow">Relacionamentos familiares</div>
+                {canEdit && useApi && (
+                  <button className="btn btn-sm btn-primary" onClick={() => setRelationOpen(true)} disabled={mutation.saving}>
+                    <Icon name="plus" size={13}/>Vincular familiar
+                  </button>
+                )}
+              </div>
               <RelationGroup
                 label="Pais"
                 people={parents}

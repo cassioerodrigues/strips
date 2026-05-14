@@ -766,7 +766,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
         birthYear: "", birthMonth: "", birthDay: "", birthPlace: "", birthCountry: "",
         deathYear: "", deathPlace: "",
         relType: "child", relTo: "",
-        spouseId: "",
+        spouseId: "", parentIds: [], childIds: [], spouseIds: [], siblingIds: [],
         occupation: "", bio: "", tags: [],
       });
       setTab("basic");
@@ -775,6 +775,13 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
 
   if (!form) return null;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const toggleId = (key, id) => setForm(f => {
+    const current = Array.isArray(f[key]) ? f[key] : [];
+    return {
+      ...f,
+      [key]: current.includes(id) ? current.filter(x => x !== id) : current.concat([id]),
+    };
+  });
 
   async function save() {
     if (readOnly || saving) return;
@@ -796,7 +803,12 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   const missingRequired = [];
   if (!String(form.first || "").trim()) missingRequired.push("primeiro nome");
   if (!String(form.last || "").trim()) missingRequired.push("sobrenome");
-  if (!isFirstPerson && !form.relTo) missingRequired.push("pessoa de referência");
+  const relationshipCount = (form.parentIds || []).length +
+    (form.childIds || []).length +
+    (form.spouseIds || []).length +
+    (form.siblingIds || []).length +
+    (form.relTo ? 1 : 0);
+  if (!isFirstPerson && relationshipCount === 0) missingRequired.push("ao menos um vínculo familiar");
   const canSave = missingRequired.length === 0;
   const requiredHint = missingRequired.length > 0
     ? "Preencha " + missingRequired.join(", ")
@@ -866,65 +878,61 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
           <>
             <div className="form-eyebrow">Como essa pessoa se relaciona com a sua árvore?</div>
             <div className="form-grid">
-              <Field label="Tipo de vínculo" span={4} required>
-                <SegmentedRadio
-                  value={form.relType}
-                  onChange={v => set("relType", v)}
-                  options={[
-                    ["child", "Filho(a) de"],
-                    ["parent", "Pai/Mãe de"],
-                    ["spouse", "Cônjuge de"],
-                    ["sibling", "Irmão/Irmã de"],
-                  ]}
-                />
-              </Field>
-              <Field label="Pessoa de referência" span={4} required hint="quem já está na árvore" error={!form.relTo ? "Escolha uma pessoa já cadastrada." : null}>
+              <Field label="Pais / mães" span={4} required={relationshipCount === 0} hint="selecione uma ou mais pessoas">
                 <div className="people-picker" style={{maxHeight: 240, overflowY: "auto"}}>
                   {peopleArr.map(p => (
                     <button
                       type="button"
                       key={p.id}
-                      className={"person-chip " + (form.relTo === p.id ? "person-chip-on" : "")}
-                      onClick={() => set("relTo", p.id)}
+                      className={"person-chip " + ((form.parentIds || []).includes(p.id) ? "person-chip-on" : "")}
+                      onClick={() => toggleId("parentIds", p.id)}
                     >
                       <Avatar person={p} size={22}/>
                       <span>{p.first} {p.last}</span>
                       <span style={{color: "var(--muted-2)", fontSize: 11}}>
                         {p.birth?.year}{p.death ? "–" + p.death.year : ""}
                       </span>
-                      {form.relTo === p.id && <Icon name="check" size={12}/>}
+                      {(form.parentIds || []).includes(p.id) && <Icon name="check" size={12}/>}
                     </button>
                   ))}
                 </div>
               </Field>
-              {form.relType === "child" && form.relTo && (
-                <Field label="Cônjuge da pessoa de referência" span={4} hint="opcional — o outro pai/mãe">
-                  <div className="people-picker">
-                    {peopleArr.filter(p => p.id !== form.relTo).slice(0, 12).map(p => (
-                      <button
-                        type="button"
-                        key={p.id}
-                        className={"person-chip " + (form.spouseId === p.id ? "person-chip-on" : "")}
-                        onClick={() => set("spouseId", form.spouseId === p.id ? "" : p.id)}
-                      >
-                        <Avatar person={p} size={22}/>
-                        <span>{p.first} {p.last}</span>
-                        {form.spouseId === p.id && <Icon name="check" size={12}/>}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-              )}
+              <Field label="Filhos(as)" span={4} hint="opcional">
+                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
+                  {peopleArr.map(p => (
+                    <button type="button" key={p.id} className={"person-chip " + ((form.childIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("childIds", p.id)}>
+                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
+                      {(form.childIds || []).includes(p.id) && <Icon name="check" size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Cônjuges" span={4} hint="opcional">
+                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
+                  {peopleArr.map(p => (
+                    <button type="button" key={p.id} className={"person-chip " + ((form.spouseIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("spouseIds", p.id)}>
+                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
+                      {(form.spouseIds || []).includes(p.id) && <Icon name="check" size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Irmãos(ãs)" span={4} hint="opcional - copia os pais conhecidos">
+                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
+                  {peopleArr.map(p => (
+                    <button type="button" key={p.id} className={"person-chip " + ((form.siblingIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("siblingIds", p.id)}>
+                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
+                      {(form.siblingIds || []).includes(p.id) && <Icon name="check" size={12}/>}
+                    </button>
+                  ))}
+                </div>
+              </Field>
             </div>
-            {form.relTo && (
+            {relationshipCount > 0 && (
               <div className="ai-suggest" style={{marginTop: 16}}>
                 <Icon name="sparkle" size={14}/>
                 <div>
-                  <strong>Pré-visualização:</strong> {form.first || "Nova pessoa"} {form.last} será inserido(a) como {" "}
-                  {form.relType === "child" && <>filho(a) de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
-                  {form.relType === "parent" && <>pai/mãe de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
-                  {form.relType === "spouse" && <>cônjuge de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}
-                  {form.relType === "sibling" && <>irmão/irmã de <strong>{peopleById[form.relTo].first} {peopleById[form.relTo].last}</strong></>}.
+                  <strong>Pré-visualização:</strong> {form.first || "Nova pessoa"} {form.last} será criada com {relationshipCount} vínculo(s) familiar(es).
                 </div>
               </div>
             )}
@@ -1024,4 +1032,123 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   );
 }
 
+function LinkPersonRelationModal({ open, person, people = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+  const F = window.FAMILY;
+  const [form, setForm] = React.useState({ relationType: "parent", targetIds: [] });
+
+  React.useEffect(() => {
+    if (open) setForm({ relationType: "parent", targetIds: [] });
+  }, [open]);
+
+  if (!open || !person) return null;
+
+  const sourcePeople = (people || Object.values(F.people)).filter(p => p && p.id !== person.id);
+  const peopleArr = sourcePeople.slice().sort((a,b) =>
+    (a.first || "").localeCompare(b.first || "")
+  );
+  const selectedIds = form.targetIds || [];
+  const canSave = selectedIds.length > 0;
+  const relationLabels = {
+    parent: "pais / mães",
+    child: "filhos(as)",
+    spouse: "cônjuges",
+    sibling: "irmãos(ãs)",
+  };
+
+  function toggle(id) {
+    setForm(f => {
+      const ids = f.targetIds || [];
+      return {
+        ...f,
+        targetIds: ids.includes(id) ? ids.filter(x => x !== id) : ids.concat([id]),
+      };
+    });
+  }
+
+  async function save() {
+    if (readOnly || saving || !canSave) return;
+    try {
+      await onSave?.(form);
+      onClose();
+    } catch (_) {
+      // O caller mantém a mensagem em `error`.
+    }
+  }
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      size="md"
+      icon={<div className="event-modal-ic"><Icon name="tree" size={20}/></div>}
+      title="Vincular pessoa existente"
+      subtitle={`Adicione vínculos familiares para ${person.first} ${person.last || ""}`.trim()}
+    >
+      <div className="modal-body modal-body-scroll">
+        <div className="form-grid">
+          <Field label="Tipo de vínculo" span={4} required>
+            <SegmentedRadio
+              value={form.relationType}
+              onChange={v => setForm(f => ({ ...f, relationType: v, targetIds: [] }))}
+              options={[
+                ["parent", "Pai/Mãe"],
+                ["child", "Filho(a)"],
+                ["spouse", "Cônjuge"],
+                ["sibling", "Irmão/Irmã"],
+              ]}
+            />
+          </Field>
+          <Field label="Pessoas" span={4} required error={!canSave ? "Selecione ao menos uma pessoa." : null}>
+            <div className="people-picker" style={{maxHeight: 280, overflowY: "auto"}}>
+              {peopleArr.map(p => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className={"person-chip " + (selectedIds.includes(p.id) ? "person-chip-on" : "")}
+                  onClick={() => toggle(p.id)}
+                >
+                  <Avatar person={p} size={22}/>
+                  <span>{p.first} {p.last}</span>
+                  <span style={{color: "var(--muted-2)", fontSize: 11}}>
+                    {p.birth?.year}{p.death ? "–" + p.death.year : ""}
+                  </span>
+                  {selectedIds.includes(p.id) && <Icon name="check" size={12}/>}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </div>
+        {canSave && (
+          <div className="ai-suggest" style={{marginTop: 16}}>
+            <Icon name="sparkle" size={14}/>
+            <div>
+              <strong>Pré-visualização:</strong> {selectedIds.length} pessoa(s) serão vinculadas como {relationLabels[form.relationType]}.
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="modal-foot">
+        <div className="modal-foot-hint">
+          {error
+            ? <span className="auth-error" role="alert">{error}</span>
+            : readOnly
+            ? <>{readOnlyReason || "Somente leitura"}</>
+            : !canSave
+            ? <><span className="dirty-dot"/>Selecione ao menos uma pessoa</>
+            : <><Icon name="check" size={12}/>Pronto para vincular</>}
+        </div>
+        <div className="modal-foot-actions">
+          <button className="btn btn-ghost" onClick={onClose}>{readOnly ? "Fechar" : "Cancelar"}</button>
+          {!readOnly && (
+            <button className="btn btn-primary" onClick={save} disabled={!canSave || saving}>
+              <Icon name="plus" size={14}/>{saving ? "Salvando..." : "Vincular"}
+            </button>
+          )}
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+window.LinkPersonRelationModal = LinkPersonRelationModal;
 window.AddPersonModal = AddPersonModal;

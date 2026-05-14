@@ -494,6 +494,40 @@
     return union ? [union.partner_a_id, union.partner_b_id] : [];
   }
 
+  function uniqueIds(ids) {
+    return (Array.isArray(ids) ? ids : [])
+      .filter(Boolean)
+      .filter(function (id, index, arr) {
+        return arr.indexOf(id) === index;
+      });
+  }
+
+  function relationshipAffectedIds(personId, form) {
+    return uniqueIds([personId]
+      .concat(form && form.parentIds)
+      .concat(form && form.childIds)
+      .concat(form && form.spouseIds)
+      .concat(form && form.siblingIds)
+      .concat([form && form.relTo, form && form.spouseId]));
+  }
+
+  function hasUnionBetween(a, b) {
+    return (state.unions || []).some(function (u) {
+      return u && (
+        (u.partner_a_id === a && u.partner_b_id === b) ||
+        (u.partner_a_id === b && u.partner_b_id === a)
+      );
+    });
+  }
+
+  function filterExistingSpouseLinks(personId, form) {
+    const next = Object.assign({}, form || {});
+    next.spouseIds = uniqueIds(next.spouseIds).filter(function (spouseId) {
+      return spouseId !== personId && !hasUnionBetween(personId, spouseId);
+    });
+    return next;
+  }
+
   async function mutateAndRefresh(mutation, affectedPersonIds) {
     if (!state.canEdit) {
       throw new Error("Visualizadores não podem editar esta árvore.");
@@ -509,7 +543,7 @@
     createPerson: function (form) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.createPersonWithRelation(state.treeId, form);
-      }, [form && form.relTo, form && form.spouseId]);
+      }, relationshipAffectedIds(null, form));
     },
     updatePerson: function (personId, form) {
       return mutateAndRefresh(function () {
@@ -525,6 +559,12 @@
       return mutateAndRefresh(function () {
         return window.genealogyApi.removeParent(childId, parentId);
       }, [childId, parentId]);
+    },
+    addRelationships: function (personId, form) {
+      const relationshipForm = filterExistingSpouseLinks(personId, form);
+      return mutateAndRefresh(function () {
+        return window.genealogyApi.createRelationshipLinks(state.treeId, personId, relationshipForm);
+      }, relationshipAffectedIds(personId, relationshipForm));
     },
     addEvent: function (personId, form) {
       return mutateAndRefresh(function () {

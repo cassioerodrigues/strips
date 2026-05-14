@@ -63,6 +63,9 @@ function plain(value) {
     occupation: "",
     bio: "Bio",
     tags: [" família ", "", "Brasil"],
+    externalIds: { generation: "3" },
+    birthNote: " Registro civil ",
+    birthSource: " Cartorio A ",
   })), {
     first_name: "Ana",
     middle_names: null,
@@ -82,6 +85,7 @@ function plain(value) {
     occupation: null,
     bio: "Bio",
     tags: ["família", "Brasil"],
+    external_ids: { generation: "3", birth_note: "Registro civil", birth_source: "Cartorio A" },
   });
 
   await api.createPersonWithRelation("tree-1", {

@@ -28,6 +28,13 @@
 
   function personPayloadFromForm(form) {
     const living = form && form.living !== false;
+    const externalIds = Object.assign({}, (form && form.externalIds) || {});
+    const birthNote = cleanText(form && form.birthNote);
+    const birthSource = cleanText(form && form.birthSource);
+    if (birthNote) externalIds.birth_note = birthNote;
+    else delete externalIds.birth_note;
+    if (birthSource) externalIds.birth_source = birthSource;
+    else delete externalIds.birth_source;
     return {
       first_name: cleanText(form && form.first),
       middle_names: cleanText(form && form.middle),
@@ -47,6 +54,7 @@
       occupation: cleanText(form && form.occupation),
       bio: cleanText(form && form.bio),
       tags: cleanTags(form && form.tags),
+      external_ids: externalIds,
     };
   }
 

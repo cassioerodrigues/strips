@@ -181,10 +181,11 @@ function TagsInput({ value = [], onChange }) {
 // EDIT PERSON MODAL
 // ============================================================
 
-function EditPersonModal({ open, person, onClose, onSave, onDelete, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function EditPersonModal({ open, person, onClose, onSave, onDelete, onUploadBirthDocument, birthDocuments = [], uploadingBirthDocument = false, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [form, setForm] = React.useState(null);
   const [tab, setTab] = React.useState("identity");
   const [dirty, setDirty] = React.useState(false);
+  const birthDocInputRef = React.useRef(null);
 
   React.useEffect(() => {
     if (open && person) {
@@ -201,6 +202,8 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, saving = fal
         birthDay: person.birth?.day || "",
         birthPlace: person.birth?.place || "",
         birthCountry: person.birth?.country || "",
+        birthNote: person.birth?.note || person.externalIds?.birth_note || "",
+        birthSource: person.birth?.source || person.externalIds?.birth_source || "",
         deathYear: person.death?.year || "",
         deathPlace: person.death?.place || "",
         cause: person.death?.cause || "",
@@ -209,6 +212,7 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, saving = fal
         tags: person.tags || [],
         privacy: person.privacy || "family",
         sources: person.sources || "",
+        externalIds: person.externalIds || {},
       });
       setTab("identity");
       setDirty(false);
@@ -333,6 +337,56 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, saving = fal
               <TextInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Itália"/>
             </Field>
 
+            <div className="form-divider" data-label="Detalhes do nascimento"/>
+
+            <Field label="Descrição" span={4} hint="contexto do registro, cartório, batismo ou narrativa familiar">
+              <TextArea
+                rows={4}
+                value={form.birthNote}
+                onChange={v => set("birthNote", v)}
+                placeholder="Registro encontrado em certidão civil, batismo ou relato familiar..."
+              />
+            </Field>
+            <Field label="Anexar documentos ou fotos" span={4}>
+              <input
+                ref={birthDocInputRef}
+                type="file"
+                className="media-hidden-input"
+                onChange={e => {
+                  const file = e.target.files && e.target.files[0];
+                  e.target.value = "";
+                  if (file) onUploadBirthDocument?.(file);
+                }}
+              />
+              <div className="dropzone-mini">
+                <Icon name="upload" size={18}/>
+                <div>
+                  <strong>{uploadingBirthDocument ? "Enviando arquivo..." : "Documento de nascimento"}</strong>
+                  {!readOnly && (
+                    <> ou <button type="button" className="link" onClick={() => birthDocInputRef.current && birthDocInputRef.current.click()} disabled={uploadingBirthDocument}>selecionar do computador</button></>
+                  )}
+                  <div className="dropzone-mini-hint">Certidões, batismos, fotos e PDFs ficam vinculados ao perfil.</div>
+                </div>
+              </div>
+              {birthDocuments.length > 0 && (
+                <div className="birth-doc-list">
+                  {birthDocuments.slice(0, 3).map(item => (
+                    <div key={item.id} className="birth-doc-item">
+                      <Icon name="doc" size={13}/>
+                      <span>{item.title || "Documento"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Field>
+            <Field label="Fonte" span={4} hint="onde essa informação foi encontrada">
+              <TextInput
+                value={form.birthSource}
+                onChange={v => set("birthSource", v)}
+                placeholder="Cartório de Caxias do Sul, livro 7, fls. 11"
+              />
+            </Field>
+
             <div className="form-divider" data-label="Falecimento"/>
 
             <Field label="Status" span={4}>
@@ -451,7 +505,18 @@ const EVENT_TYPES = [
   { id: "custom", label: "Outro", icon: "plus", tone: "neutral" },
 ];
 
-function AddEventModal({ open, person, people = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function eventTypeToFormType(event) {
+  if (!event) return "marriage";
+  const map = {
+    residence: "move",
+    occupation: "career",
+    education: "education",
+  };
+  const type = map[event.type] || event.type || "custom";
+  return EVENT_TYPES.some(e => e.id === type) ? type : "custom";
+}
+
+function AddEventModal({ open, person, people = null, event = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [step, setStep] = React.useState(1);
   const [form, setForm] = React.useState({
     type: "marriage",
@@ -473,26 +538,27 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
 
   React.useEffect(() => {
     if (open) {
-      setStep(1);
+      const editingType = eventTypeToFormType(event);
+      setStep(event && event.id ? 2 : 1);
       setForm({
-        type: "marriage",
-        title: "",
-        year: "",
-        month: "",
-        day: "",
+        type: editingType,
+        title: event ? (event.title || event.customLabel || "") : "",
+        year: event && event.year != null ? String(event.year) : "",
+        month: event && event.month != null ? String(event.month) : "",
+        day: event && event.day != null ? String(event.day) : "",
         approx: false,
-        precision: "full",
-        place: "",
+        precision: event && event.day ? "full" : event && event.month ? "month-year" : event && event.year ? "year" : "full",
+        place: event ? (event.place || "") : "",
         country: "",
-        description: "",
+        description: event ? (event.note || event.description || "") : "",
         relatedPeople: [],
         marriageWith: "",
         otherParent: "",
-        sources: "",
+        sources: event ? (event.source || "") : "",
         attachments: [],
       });
     }
-  }, [open, person?.id]);
+  }, [open, person?.id, event && event.id]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -521,6 +587,7 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
   sourcePeople.forEach(p => { peopleById[p.id] = p; });
   const candidates = person ? sourcePeople.filter(x => x.id !== person.id) : [];
   const eventDef = EVENT_TYPES.find(e => e.id === form.type);
+  const editing = !!(event && event.id);
 
   return (
     <ModalShell
@@ -528,17 +595,21 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
       onClose={onClose}
       size="md"
       icon={<div className="event-modal-ic"><Icon name={eventDef?.icon || "plus"} size={20}/></div>}
-      title="Adicionar evento à linha do tempo"
+      title={editing ? "Editar evento da linha do tempo" : "Adicionar evento à linha do tempo"}
       subtitle={person ? `Para ${person.first} ${person.last}` : "Selecione uma pessoa primeiro"}
     >
       <div className="stepper">
-        {["Tipo", "Quando & onde", "Detalhes"].map((label, i) => (
+        {["Tipo", "Quando & onde", "Detalhes"].map((label, i) => {
+          if (editing && i === 0) return null;
+          const displayStep = editing ? i : i + 1;
+          return (
           <div key={label} className={"stepper-step " + (step > i+1 ? "stepper-done " : "") + (step === i+1 ? "stepper-active" : "")}>
-            <span className="stepper-bullet">{step > i+1 ? <Icon name="check" size={11}/> : i+1}</span>
+            <span className="stepper-bullet">{step > i+1 ? <Icon name="check" size={11}/> : displayStep}</span>
             <span className="stepper-label">{label}</span>
             {i < 2 && <span className="stepper-line"/>}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="modal-body modal-body-scroll">
@@ -724,11 +795,11 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
             ? <span className="auth-error" role="alert">{error}</span>
             : readOnly
             ? <>{readOnlyReason || "Somente leitura"}</>
-            : <>Passo {step} de 3</>}
+            : <>Passo {editing ? step - 1 : step} de {editing ? 2 : 3}</>}
         </div>
         <div className="modal-foot-actions">
           {readOnly && <button className="btn btn-ghost" onClick={onClose}>Fechar</button>}
-          {!readOnly && step > 1 && <button className="btn btn-ghost" onClick={() => setStep(step - 1)} disabled={saving}><Icon name="arrow-left" size={13}/>Voltar</button>}
+          {!readOnly && step > (editing ? 2 : 1) && <button className="btn btn-ghost" onClick={() => setStep(step - 1)} disabled={saving}><Icon name="arrow-left" size={13}/>Voltar</button>}
           {!readOnly && step < 3 && (
             <button className="btn btn-primary" onClick={() => setStep(step + 1)} disabled={!canAdvance}>
               Continuar<Icon name="arrow-right" size={13}/>
@@ -736,7 +807,151 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
           )}
           {!readOnly && step === 3 && (
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              <Icon name="check" size={14}/>{saving ? "Salvando..." : "Adicionar evento"}
+              <Icon name="check" size={14}/>{saving ? "Salvando..." : editing ? "Salvar evento" : "Adicionar evento"}
+            </button>
+          )}
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function EditUnionModal({ open, person, partner, union, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+  const [form, setForm] = React.useState({
+    unionId: "",
+    year: "",
+    month: "",
+    day: "",
+    precision: "year",
+    approx: false,
+    place: "",
+    description: "",
+    status: "ongoing",
+  });
+
+  React.useEffect(() => {
+    if (!open || !union) return;
+    const year = union.start_year != null ? String(union.start_year) : (union.year != null ? String(union.year) : "");
+    const month = union.start_month != null ? String(union.start_month) : "";
+    const day = union.start_day != null ? String(union.start_day) : "";
+    setForm({
+      unionId: union.id || "",
+      year: year,
+      month: month,
+      day: day,
+      precision: day ? "full" : month ? "month-year" : year ? "year" : "unknown",
+      approx: false,
+      place: union.start_place || union.place || "",
+      description: union.notes || "",
+      status: union.status || "ongoing",
+    });
+  }, [open, union && union.id]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function save() {
+    if (readOnly || saving || !union) return;
+    try {
+      await onSave?.(form);
+      onClose();
+    } catch (_) {
+      // O caller mantem a mensagem em `error`.
+    }
+  }
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      size="md"
+      icon={<div className="event-modal-ic"><Icon name="heart" size={20}/></div>}
+      title="Editar casamento"
+      subtitle={person && partner ? `${person.first} ${person.last} e ${partner.first} ${partner.last}` : "Atualize os dados da uniao"}
+    >
+      <div className="modal-body modal-body-scroll">
+        <div className="form-grid">
+          <Field label="Casamento entre" span={4} hint="os conjuges desta uniao">
+            <div className="pair-picker">
+              <div className="pair-side">
+                <Avatar person={person} size={48}/>
+                <div className="pair-name">{person?.first} {person?.last}</div>
+                <div className="pair-meta">{person?.birth?.year}{person?.death ? `-${person.death.year}` : ""}</div>
+              </div>
+              <div className="pair-link">
+                <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+                  <line x1="0" y1="7" x2="11" y2="7" stroke="#a08658" strokeWidth="1.6"/>
+                  <line x1="21" y1="7" x2="32" y2="7" stroke="#a08658" strokeWidth="1.6"/>
+                  <circle cx="13.5" cy="7" r="3.6" stroke="#a08658" strokeWidth="1.4" fill="none"/>
+                  <circle cx="18.5" cy="7" r="3.6" stroke="#a08658" strokeWidth="1.4" fill="none"/>
+                </svg>
+              </div>
+              <div className="pair-side pair-side-pick">
+                <Avatar person={partner} size={48}/>
+                <div className="pair-name">{partner?.first} {partner?.last}</div>
+                <div className="pair-meta">{partner?.birth?.year}{partner?.death ? `-${partner.death.year}` : ""}</div>
+              </div>
+            </div>
+          </Field>
+
+          <Field label="Data do casamento" span={4} hint="precisao flexivel">
+            <PartialDate
+              value={{
+                day: form.day,
+                month: form.month,
+                year: form.year,
+                precision: form.precision,
+                approx: form.approx,
+              }}
+              onChange={d => setForm(f => ({
+                ...f,
+                day: d.day || "",
+                month: d.month || "",
+                year: d.year || "",
+                precision: d.precision,
+                approx: d.approx,
+              }))}
+            />
+          </Field>
+
+          <Field label="Cidade / local" span={2}>
+            <TextInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul"/>
+          </Field>
+
+          <Field label="Status" span={2}>
+            <SegmentedRadio
+              value={form.status}
+              onChange={v => set("status", v)}
+              options={[
+                ["ongoing", "Ativa", <Icon name="heart" size={13}/>],
+                ["ended", "Encerrada", <Icon name="x" size={13}/>],
+              ]}
+            />
+          </Field>
+
+          <Field label="Observacoes" span={4} hint="detalhes, fonte ou contexto">
+            <TextArea
+              rows={5}
+              value={form.description}
+              onChange={v => set("description", v)}
+              placeholder="Cartorio, igreja, testemunhas, fonte do registro..."
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="modal-foot">
+        <div className="modal-foot-hint">
+          {error
+            ? <span className="auth-error" role="alert">{error}</span>
+            : readOnly
+            ? <>{readOnlyReason || "Somente leitura"}</>
+            : <>Revise os dados do casamento</>}
+        </div>
+        <div className="modal-foot-actions">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
+          {!readOnly && (
+            <button className="btn btn-primary" onClick={save} disabled={saving || !union}>
+              <Icon name="check" size={14}/>{saving ? "Salvando..." : "Salvar casamento"}
             </button>
           )}
         </div>
@@ -747,6 +962,7 @@ function AddEventModal({ open, person, people = null, onClose, onSave, saving = 
 
 window.EditPersonModal = EditPersonModal;
 window.AddEventModal = AddEventModal;
+window.EditUnionModal = EditUnionModal;
 
 
 // ============================================================

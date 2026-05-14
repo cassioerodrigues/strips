@@ -63,6 +63,8 @@
         month: p.birth_month || null,
         day: p.birth_day || null,
         place: p.birth_place || "",
+        note: p.external_ids && p.external_ids.birth_note ? p.external_ids.birth_note : "",
+        source: p.external_ids && p.external_ids.birth_source ? p.external_ids.birth_source : "",
       },
       death: hasDeath
         ? {

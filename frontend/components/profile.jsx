@@ -13,7 +13,11 @@ function Profile({ personId, onBack, onPersonClick }) {
   const [tab, setTab] = React.useState("bio");
   const [editOpen, setEditOpen] = React.useState(false);
   const [eventOpen, setEventOpen] = React.useState(false);
+  const [eventEditOpen, setEventEditOpen] = React.useState(false);
+  const [eventToEdit, setEventToEdit] = React.useState(null);
   const [relationOpen, setRelationOpen] = React.useState(false);
+  const [unionEditOpen, setUnionEditOpen] = React.useState(false);
+  const [unionToEdit, setUnionToEdit] = React.useState(null);
   const [mutation, setMutation] = React.useState({ saving: false, error: null });
   const [mediaState, setMediaState] = React.useState({ loading: false, items: [], error: null, action: null });
   const photoInputRef = React.useRef(null);
@@ -127,13 +131,6 @@ function Profile({ personId, onBack, onPersonClick }) {
 
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
 
-  const events = useApi
-    ? buildPersonEventsFromApi(p, children, personHook.events || [])
-    : buildPersonEvents(p, F);
-  const canEdit = useApi ? !!tree.canEdit : true;
-  const readOnlyReason = tree.role === "viewer"
-    ? "Visualizadores não podem editar esta árvore."
-    : "Somente leitura.";
   const mediaItems = mediaState.items || [];
   const photoMedia = mediaItems.filter(item =>
     item.kind === "photo" || (item.mimeType && item.mimeType.indexOf("image/") === 0)
@@ -141,6 +138,14 @@ function Profile({ personId, onBack, onPersonClick }) {
   const documentMedia = mediaItems.filter(item =>
     item.kind !== "photo" && !(item.mimeType && item.mimeType.indexOf("image/") === 0)
   );
+  const birthDocuments = mediaItems.filter(isBirthMedia);
+  const events = useApi
+    ? buildPersonEventsFromApi(p, children, personHook.events || [], birthDocuments)
+    : buildPersonEvents(p, F);
+  const canEdit = useApi ? !!tree.canEdit : true;
+  const readOnlyReason = tree.role === "viewer"
+    ? "Visualizadores não podem editar esta árvore."
+    : "Somente leitura.";
 
   function friendlyError(e) {
     if (e && e.status === 403) return "Você não tem permissão para alterar esta árvore.";
@@ -148,12 +153,13 @@ function Profile({ personId, onBack, onPersonClick }) {
     return (e && e.message) || "Não foi possível salvar a alteração.";
   }
 
-  async function uploadMediaFile(file, preferredKind) {
+  async function uploadMediaFile(file, preferredKind, options) {
     if (!file || !mediaPersonId || !tree.treeId || !window.genealogyApi) return;
     setMediaState(prev => ({ ...prev, action: "upload", error: null }));
     try {
       await window.genealogyApi.uploadPersonMedia(tree.treeId, mediaPersonId, file, {
         kind: preferredKind || window.genealogyApi.mediaKindFromFile(file),
+        ...((options && typeof options === "object") ? options : {}),
       });
       await refreshPersonMedia();
       if (window.useTree && window.useTree.refetch) window.useTree.refetch();
@@ -204,6 +210,13 @@ function Profile({ personId, onBack, onPersonClick }) {
     return runMutation(() => window.useTree.actions.updatePerson(p.id, form));
   }
 
+  function uploadBirthDocument(file) {
+    return uploadMediaFile(file, file && file.type && file.type.indexOf("image/") === 0 ? "photo" : "document", {
+      title: file && file.name ? file.name.replace(/\.[^.]+$/, "") : "Documento de nascimento",
+      description: "Documento vinculado ao evento de nascimento",
+    });
+  }
+
   function deletePerson(options) {
     const opts = options || {};
     if (!opts.skipConfirm) {
@@ -218,6 +231,11 @@ function Profile({ personId, onBack, onPersonClick }) {
 
   function saveEvent(form) {
     return runMutation(() => window.useTree.actions.addEvent(p.id, form));
+  }
+
+  function saveEditedEvent(form) {
+    if (!eventToEdit) return Promise.resolve();
+    return runMutation(() => window.useTree.actions.updateEvent(p.id, eventToEdit.id, form));
   }
 
   function saveRelation(form) {
@@ -242,15 +260,8 @@ function Profile({ personId, onBack, onPersonClick }) {
   }
 
   function editEvent(event) {
-    const title = window.prompt("Título do evento", event.title || "");
-    if (title == null) return;
-    return runMutation(() => window.useTree.actions.updateEvent(p.id, event.id, {
-      type: event.type || "custom",
-      title: title,
-      year: event.year || "",
-      place: event.place || "",
-      description: event.note || "",
-    }));
+    setEventToEdit(event);
+    setEventEditOpen(true);
   }
 
   function toggleUnionStatus(union) {
@@ -259,26 +270,39 @@ function Profile({ personId, onBack, onPersonClick }) {
   }
 
 
-  function editUnionDetails(union) {
-    const yearInput = window.prompt("Ano do casamento", union.start_year != null ? String(union.start_year) : "");
-    if (yearInput == null) return;
-    const placeInput = window.prompt("Local do casamento", union.start_place || "");
-    if (placeInput == null) return;
-    const notesInput = window.prompt("Observações", union.notes || "");
-    if (notesInput == null) return;
+  function openUnionEditor(union) {
+    setUnionToEdit(union);
+    setUnionEditOpen(true);
+  }
 
-    const yearTrimmed = String(yearInput).trim();
-    const parsedYear = yearTrimmed ? Number.parseInt(yearTrimmed, 10) : null;
-    if (yearTrimmed && !Number.isFinite(parsedYear)) {
-      setMutation({ saving: false, error: "Ano do casamento inválido." });
-      return;
+  function cleanUnionInt(value, label) {
+    if (value == null || value === "") return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const n = Number.parseInt(text, 10);
+    if (!Number.isFinite(n) || !/^\d+$/.test(text)) {
+      throw new Error(label + " invalido.");
+    }
+    return n;
+  }
+
+  function saveUnionDetails(form) {
+    let payload;
+    try {
+      payload = {
+        start_year: cleanUnionInt(form && form.year, "Ano do casamento"),
+        start_month: cleanUnionInt(form && form.month, "Mes do casamento"),
+        start_day: cleanUnionInt(form && form.day, "Dia do casamento"),
+        start_place: String((form && form.place) || "").trim() || null,
+        notes: String((form && form.description) || "").trim() || null,
+      };
+      if (form && form.status) payload.status = form.status;
+    } catch (e) {
+      setMutation({ saving: false, error: e.message || "Dados do casamento invalidos." });
+      return Promise.reject(e);
     }
 
-    return runMutation(() => window.useTree.actions.updateUnion(p.id, union.id, {
-      start_year: parsedYear,
-      start_place: String(placeInput || "").trim() || null,
-      notes: String(notesInput || "").trim() || null,
-    }));
+    return runMutation(() => window.useTree.actions.updateUnion(p.id, form.unionId, payload));
   }
 
   function deleteUnion(union) {
@@ -325,6 +349,9 @@ function Profile({ personId, onBack, onPersonClick }) {
             onClose={() => setEditOpen(false)}
             onSave={savePerson}
             onDelete={() => deletePerson({ skipConfirm: true })}
+            onUploadBirthDocument={uploadBirthDocument}
+            birthDocuments={birthDocuments.length > 0 ? birthDocuments : documentMedia}
+            uploadingBirthDocument={mediaState.action === "upload"}
             saving={mutation.saving}
             error={mutation.error}
             readOnly={!canEdit}
@@ -341,12 +368,36 @@ function Profile({ personId, onBack, onPersonClick }) {
             readOnly={!canEdit}
             readOnlyReason={readOnlyReason}
           />}
+          {window.AddEventModal && <window.AddEventModal
+            open={eventEditOpen}
+            person={p}
+            people={useApi ? tree.people : Object.values(F.people)}
+            event={eventToEdit}
+            onClose={() => { setEventEditOpen(false); setEventToEdit(null); }}
+            onSave={saveEditedEvent}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
           {window.LinkPersonRelationModal && <window.LinkPersonRelationModal
             open={relationOpen}
             person={p}
             people={useApi ? tree.people : Object.values(F.people)}
             onClose={() => setRelationOpen(false)}
             onSave={saveRelation}
+            saving={mutation.saving}
+            error={mutation.error}
+            readOnly={!canEdit}
+            readOnlyReason={readOnlyReason}
+          />}
+          {window.EditUnionModal && <window.EditUnionModal
+            open={unionEditOpen}
+            person={p}
+            partner={spouse}
+            union={unionToEdit}
+            onClose={() => setUnionEditOpen(false)}
+            onSave={saveUnionDetails}
             saving={mutation.saving}
             error={mutation.error}
             readOnly={!canEdit}
@@ -423,7 +474,7 @@ function Profile({ personId, onBack, onPersonClick }) {
                   />
                   {canEdit && spouseUnion && (
                     <div className="meta-row" style={{marginTop: 8}}>
-                      <button className="btn btn-sm btn-ghost" onClick={() => editUnionDetails(spouseUnion)} disabled={mutation.saving}>
+                      <button className="btn btn-sm btn-ghost" onClick={() => openUnionEditor(spouseUnion)} disabled={mutation.saving}>
                         <Icon name="edit" size={13}/>Editar casamento
                       </button>
                       <button className="btn btn-sm btn-ghost" onClick={() => toggleUnionStatus(spouseUnion)} disabled={mutation.saving}>
@@ -455,6 +506,23 @@ function Profile({ personId, onBack, onPersonClick }) {
                       <div className="ptl-title">{e.title}</div>
                       <div className="ptl-place">{e.place}</div>
                       {e.note && <div className="ptl-note">{e.note}</div>}
+                      {e.source && <div className="ptl-source"><Icon name="book" size={12}/>Fonte: {e.source}</div>}
+                      {e.documents && e.documents.length > 0 && (
+                        <div className="ptl-docs">
+                          {e.documents.slice(0, 3).map(item => (
+                            <button
+                              key={item.id}
+                              className="ptl-doc-chip"
+                              disabled={!item.downloadUrl}
+                              onClick={() => item.downloadUrl && window.open(item.downloadUrl, "_blank", "noopener")}
+                              title={item.downloadError || "Abrir documento"}
+                            >
+                              <Icon name="doc" size={12}/>
+                              <span>{item.title || "Documento"}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {canEdit && e.id && (
                         <div className="meta-row" style={{marginTop: 8}}>
                           <button className="link" onClick={() => editEvent(e)}>Editar evento</button>
@@ -791,6 +859,15 @@ function mediaKindLabel(item) {
   return "Arquivo";
 }
 
+function isBirthMedia(item) {
+  if (!item) return false;
+  const text = [
+    item.title,
+    item.description,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return text.includes("nascimento") || text.includes("certidao") || text.includes("certidão") || text.includes("batismo");
+}
+
 function formatFileSize(bytes) {
   const n = Number(bytes || 0);
   if (!Number.isFinite(n) || n <= 0) return "tamanho desconhecido";
@@ -801,7 +878,16 @@ function formatFileSize(bytes) {
 
 function buildPersonEvents(p, F) {
   const events = [];
-  if (p.birth?.year) events.push({ year: p.birth.year, title: "Nascimento", place: p.birth.place, color: "#5b6e4f" });
+  if (p.birth?.year) {
+    events.push({
+      year: p.birth.year,
+      title: "Nascimento",
+      place: p.birth.place,
+      color: "#5b6e4f",
+      note: p.birth.note,
+      source: p.birth.source,
+    });
+  }
   const union = F.unions.find(u => u.partners.includes(p.id));
   if (union) {
     const partner = F.people[union.partners.find(x => x !== p.id)];
@@ -810,7 +896,14 @@ function buildPersonEvents(p, F) {
   // Children births
   Object.values(F.people).forEach(c => {
     if ((c.parents||[]).includes(p.id) && c.birth?.year) {
-      events.push({ year: c.birth.year, title: `Nascimento de ${c.first}`, place: c.birth.place, color: "#a08658", note: `${c.first} {${c.last}}` });
+      events.push({
+        year: c.birth.year,
+        title: `Nascimento de ${c.first}`,
+        place: c.birth.place,
+        color: "#a08658",
+        note: c.birth.note || `${c.first} ${c.last}`.trim(),
+        source: c.birth.source,
+      });
     }
   });
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
@@ -819,20 +912,39 @@ function buildPersonEvents(p, F) {
 }
 
 // Eventos da API entram junto com nascimento + filhos + morte derivados.
-function buildPersonEventsFromApi(p, children, apiEvents) {
+function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments) {
   const events = (apiEvents || []).map(e => ({
     id: e.id,
     type: e.type,
     year: e.year,
+    month: e.month,
+    day: e.day,
     title: e.title,
     place: e.place,
     color: "#3a5b6b",
     note: e.description,
   }));
-  if (p.birth?.year) events.push({ year: p.birth.year, title: "Nascimento", place: p.birth.place, color: "#5b6e4f" });
+  if (p.birth?.year) {
+    events.push({
+      year: p.birth.year,
+      title: "Nascimento",
+      place: p.birth.place,
+      color: "#5b6e4f",
+      note: p.birth.note,
+      source: p.birth.source,
+      documents: birthDocuments || [],
+    });
+  }
   (children || []).forEach(c => {
     if (c.birth?.year) {
-      events.push({ year: c.birth.year, title: `Nascimento de ${c.first}`, place: c.birth.place, color: "#a08658" });
+      events.push({
+        year: c.birth.year,
+        title: `Nascimento de ${c.first}`,
+        place: c.birth.place,
+        color: "#a08658",
+        note: c.birth.note,
+        source: c.birth.source,
+      });
     }
   });
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });

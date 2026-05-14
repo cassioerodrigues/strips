@@ -36,3 +36,4 @@ node_modules/
 dist/
 build/
 .next/
+backend/db/migrations/0012_tree_members_person_id.sql

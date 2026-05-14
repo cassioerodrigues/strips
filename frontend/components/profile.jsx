@@ -258,6 +258,29 @@ function Profile({ personId, onBack, onPersonClick }) {
     return runMutation(() => window.useTree.actions.updateUnion(p.id, union.id, { status: nextStatus }));
   }
 
+
+  function editUnionDetails(union) {
+    const yearInput = window.prompt("Ano do casamento", union.start_year != null ? String(union.start_year) : "");
+    if (yearInput == null) return;
+    const placeInput = window.prompt("Local do casamento", union.start_place || "");
+    if (placeInput == null) return;
+    const notesInput = window.prompt("Observações", union.notes || "");
+    if (notesInput == null) return;
+
+    const yearTrimmed = String(yearInput).trim();
+    const parsedYear = yearTrimmed ? Number.parseInt(yearTrimmed, 10) : null;
+    if (yearTrimmed && !Number.isFinite(parsedYear)) {
+      setMutation({ saving: false, error: "Ano do casamento inválido." });
+      return;
+    }
+
+    return runMutation(() => window.useTree.actions.updateUnion(p.id, union.id, {
+      start_year: parsedYear,
+      start_place: String(placeInput || "").trim() || null,
+      notes: String(notesInput || "").trim() || null,
+    }));
+  }
+
   function deleteUnion(union) {
     if (!window.confirm("Remover esta união da árvore?")) return;
     return runMutation(() => window.useTree.actions.deleteUnion(p.id, union.id));
@@ -400,6 +423,9 @@ function Profile({ personId, onBack, onPersonClick }) {
                   />
                   {canEdit && spouseUnion && (
                     <div className="meta-row" style={{marginTop: 8}}>
+                      <button className="btn btn-sm btn-ghost" onClick={() => editUnionDetails(spouseUnion)} disabled={mutation.saving}>
+                        <Icon name="edit" size={13}/>Editar casamento
+                      </button>
                       <button className="btn btn-sm btn-ghost" onClick={() => toggleUnionStatus(spouseUnion)} disabled={mutation.saving}>
                         <Icon name="edit" size={13}/>{spouseUnion.status === "ongoing" ? "Marcar encerrada" : "Marcar ativa"}
                       </button>

@@ -72,3 +72,54 @@ assert.equal(
   childSpouseLayout.nodes.spouse.y,
   "a spouse with unknown parents should follow their partner's derived generation",
 );
+
+const crossingLayout = context.window.treeLayout.computeApiTreeLayout(
+  [
+    { id: "p-left", first: "Alice", birth: { year: 1940 } },
+    { id: "p-right", first: "Bruno", birth: { year: 1941 } },
+    { id: "c-left", first: "Carol", birth: { year: 1970 } },
+    { id: "c-right", first: "Diego", birth: { year: 1971 } },
+  ],
+  [],
+  {
+    "c-left": ["p-left"],
+    "c-right": ["p-right"],
+  },
+);
+
+assert.ok(
+  crossingLayout.nodes["c-left"].x < crossingLayout.nodes["c-right"].x,
+  "children should follow the horizontal order of their parents to reduce crossing lines",
+);
+
+const spouseAdjacencyLayout = context.window.treeLayout.computeApiTreeLayout(
+  [
+    { id: "a1", first: "A1", birth: { year: 1940 } },
+    { id: "b1", first: "B1", birth: { year: 1941 } },
+    { id: "a2", first: "A2", birth: { year: 1942 } },
+    { id: "b2", first: "B2", birth: { year: 1943 } },
+    { id: "c1", first: "C1", birth: { year: 1970 } },
+    { id: "c2", first: "C2", birth: { year: 1971 } },
+  ],
+  [
+    { partner_a_id: "a1", partner_b_id: "b1" },
+    { partner_a_id: "a2", partner_b_id: "b2" },
+  ],
+  {
+    c1: ["a1", "b1"],
+    c2: ["a2", "b2"],
+  },
+);
+
+const topRow = ["a1", "b1", "a2", "b2"].sort(
+  (left, right) => spouseAdjacencyLayout.nodes[left].x - spouseAdjacencyLayout.nodes[right].x,
+);
+
+assert.ok(
+  Math.abs(topRow.indexOf("a1") - topRow.indexOf("b1")) === 1,
+  "first couple should stay adjacent to avoid long union lines over the row",
+);
+assert.ok(
+  Math.abs(topRow.indexOf("a2") - topRow.indexOf("b2")) === 1,
+  "second couple should stay adjacent to avoid long union lines over the row",
+);

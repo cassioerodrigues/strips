@@ -152,9 +152,99 @@
     return groups;
   }
 
+
+  function orderGroupsToReduceCrossings(groups, unions, relationsByChild) {
+    const parentIndexById = {};
+    const partnersById = {};
+
+    (unions || []).forEach(function (union) {
+      const ids = unionPartnerIds(union);
+      if (ids.length !== 2) return;
+      if (!partnersById[ids[0]]) partnersById[ids[0]] = [];
+      if (!partnersById[ids[1]]) partnersById[ids[1]] = [];
+      partnersById[ids[0]].push(ids[1]);
+      partnersById[ids[1]].push(ids[0]);
+    });
+
+    return groups.map(function (group) {
+      function score(person) {
+        const parentIds = (relationsByChild && relationsByChild[person.id]) || [];
+        const indices = parentIds
+          .map(function (id) { return parentIndexById[id]; })
+          .filter(function (value) { return value != null; });
+        if (indices.length === 0) return Number.POSITIVE_INFINITY;
+        return indices.reduce(function (sum, value) { return sum + value; }, 0) / indices.length;
+      }
+
+      function comparePeople(a, b) {
+        const scoreA = score(a);
+        const scoreB = score(b);
+        if (scoreA !== scoreB) return scoreA - scoreB;
+
+        const byYear = yearOf(a) - yearOf(b);
+        if (byYear !== 0) return byYear;
+        const an = ((a.first || "") + " " + (a.last || "")).trim();
+        const bn = ((b.first || "") + " " + (b.last || "")).trim();
+        return an.localeCompare(bn);
+      }
+
+      const peopleById = {};
+      group.people.forEach(function (person) {
+        peopleById[person.id] = person;
+      });
+
+      const visited = {};
+      const clusters = [];
+      group.people.forEach(function (person) {
+        if (visited[person.id]) return;
+        const queue = [person.id];
+        const ids = [];
+        visited[person.id] = true;
+        while (queue.length > 0) {
+          const currentId = queue.shift();
+          ids.push(currentId);
+          (partnersById[currentId] || []).forEach(function (partnerId) {
+            if (!peopleById[partnerId] || visited[partnerId]) return;
+            visited[partnerId] = true;
+            queue.push(partnerId);
+          });
+        }
+        const members = ids.map(function (id) { return peopleById[id]; }).sort(comparePeople);
+        const finiteScores = members.map(score).filter(function (v) { return Number.isFinite(v); });
+        const clusterScore = finiteScores.length > 0
+          ? finiteScores.reduce(function (sum, value) { return sum + value; }, 0) / finiteScores.length
+          : Number.POSITIVE_INFINITY;
+        clusters.push({ score: clusterScore, members: members });
+      });
+
+      clusters.sort(function (a, b) {
+        if (a.score !== b.score) return a.score - b.score;
+        return comparePeople(a.members[0], b.members[0]);
+      });
+
+      const orderedPeople = clusters.reduce(function (acc, cluster) {
+        return acc.concat(cluster.members);
+      }, []);
+
+      orderedPeople.forEach(function (person, index) {
+        parentIndexById[person.id] = index;
+      });
+
+      return {
+        key: group.key,
+        generation: group.generation,
+        people: orderedPeople,
+      };
+    });
+  }
+
   function computeApiTreeLayout(people, unions, relationsByChild) {
     const layout = { nodes: {}, links: [], groups: [] };
-    const groups = deriveGenerationGroups(people, unions, relationsByChild);
+    const groups = orderGroupsToReduceCrossings(
+      deriveGenerationGroups(people, unions, relationsByChild),
+      unions,
+      relationsByChild,
+    );
     const maxCols = Math.max.apply(
       null,
       groups.map(function (g) { return Math.max(g.people.length, 1); }).concat([1]),

@@ -157,6 +157,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
     (tree.status === "ready" || tree.status === "error") &&
     Array.isArray(tree.people) &&
     tree.people.length > 0;
+  const [rootPersonId, setRootPersonId] = React.useState(null);
   const apiLayout = React.useMemo(() => {
     if (!apiCanRender) return null;
     return window.treeLayout.computeApiTreeLayout(
@@ -169,7 +170,6 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const layout = apiLayout || mockLayout;
   const peopleById = apiLayout ? (tree.peopleById || {}) : F.people;
   const focusId = apiLayout ? (tree.people[0] && tree.people[0].id) : "p_helena";
-  const [rootPersonId, setRootPersonId] = React.useState(null);
   const [zoom, setZoom] = React.useState(0.85);
   const [pan, setPan] = React.useState({ x: 60, y: 40 });
   const [hover, setHover] = React.useState(null);
@@ -414,7 +414,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
               isRoot={n.id === rootPersonId}
               dimmed={!apiLayout && isDimmed(n.id)}
               onClick={onPersonClick}
-              onSetRoot={setRootPersonId}
+              onSetRoot={(id) => setRootPersonId(prev => prev === id ? null : id)}
               onHover={setHover}
             />
           ))}

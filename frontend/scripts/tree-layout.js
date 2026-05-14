@@ -982,12 +982,13 @@
     var allFamilies = result.families.slice();
 
     // Handle disconnected components: nodes not reached from root
-    var placedIds = Object.keys(layout.nodes);
+    // When a specific root is pinned, skip disconnected components
+    // (e.g. in-law parents should not appear when viewing from the other side)
     var unplacedNodes = rtNodes.filter(function (n) { return !layout.nodes[n.id]; });
-    if (unplacedNodes.length > 0) {
+    if (unplacedNodes.length > 0 && !optRootId) {
       // Find max X of already placed nodes for offset
       var maxPlacedX = 0;
-      placedIds.forEach(function (id) {
+      Object.keys(layout.nodes).forEach(function (id) {
         var nx = layout.nodes[id].x + NODE_W;
         if (nx > maxPlacedX) maxPlacedX = nx;
       });
@@ -1040,10 +1041,6 @@
 
     // Generate links from ALL families at once (single drawnUnions map prevents duplicates)
     generateLinksFromFamilies(allFamilies, layout.nodes, unions, UNIT_X, UNIT_Y, layout.links);
-
-    // Cross-component parent-child links: connect in-law parents to their children
-    // when parents ended up in a disconnected component (e.g. parents of a spouse)
-    generateCrossComponentLinks(layout.nodes, layout.links, relationsByChild);
 
     return layout;
   }
@@ -1196,75 +1193,6 @@
         toX: Math.max(posA.x, posB.x),
         toY: posB.y + NODE_H / 2,
       });
-    });
-  }
-
-  // =========================================================================
-  // CROSS-COMPONENT LINKS
-  // When a child's parents are in a different component (e.g. in-law parents),
-  // the family structure doesn't connect them. This generates the missing links.
-  // =========================================================================
-  function generateCrossComponentLinks(layoutNodes, links, relationsByChild) {
-    if (!relationsByChild) return;
-
-    Object.keys(relationsByChild).forEach(function (childId) {
-      var childNode = layoutNodes[childId];
-      if (!childNode) return;
-
-      var childCx = childNode.x + NODE_W / 2;
-
-      // Check if this child already has a toChild drop
-      var hasParentDrop = links.some(function (l) {
-        return l.type === "drop" && l.toChild && Math.abs(l.x - childCx) < 5;
-      });
-      if (hasParentDrop) return;
-
-      // This child has no parent connection — find parents and draw link
-      var parentIds = relationsByChild[childId];
-      if (!parentIds || parentIds.length === 0) return;
-
-      var parentPositions = parentIds
-        .map(function (pid) { return layoutNodes[pid]; })
-        .filter(Boolean);
-      if (parentPositions.length === 0) return;
-
-      var parentMidX = parentPositions.reduce(function (s, p) { return s + p.x + NODE_W / 2; }, 0) / parentPositions.length;
-      var parentBottomY = parentPositions[0].y + NODE_H;
-      var childTopY = childNode.y;
-      var isCouple = parentPositions.length === 2;
-      var parentMidY = parentPositions[0].y + NODE_H / 2;
-
-      if (childTopY <= parentBottomY) return;
-
-      var busY = parentBottomY + (childTopY - parentBottomY) / 2;
-
-      // Drop from parent to bus
-      links.push({
-        type: "drop",
-        x: parentMidX,
-        y1: isCouple ? parentMidY : parentBottomY,
-        y2: busY,
-        fromUnion: isCouple,
-      });
-
-      // Drop from bus to child
-      links.push({
-        type: "drop",
-        x: childCx,
-        y1: busY,
-        y2: childTopY,
-        toChild: true,
-      });
-
-      // Horizontal bus if needed
-      if (Math.abs(parentMidX - childCx) > 0.5) {
-        links.push({
-          type: "bus",
-          x1: Math.min(parentMidX, childCx),
-          x2: Math.max(parentMidX, childCx),
-          y: busY,
-        });
-      }
     });
   }
 

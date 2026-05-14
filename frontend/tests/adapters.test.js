@@ -33,10 +33,13 @@ const person = context.window.adapters.adaptPerson({
   death_place: "Sao Paulo",
   death_cause: "natural",
   tags: ["familia"],
+  external_ids: { generation: "3" },
 });
 
 assert.equal(person.maiden, "Costa");
 assert.equal(person.maidenName, "Costa");
+assert.equal(person.generation, 3);
+assert.deepEqual(plain(person.externalIds), { generation: "3" });
 assert.deepEqual(plain(person.birth), {
   year: 1941,
   month: 7,

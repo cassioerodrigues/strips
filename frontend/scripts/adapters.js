@@ -44,6 +44,10 @@
       (p.death_place && p.death_place.length > 0) ||
       (p.death_cause && p.death_cause.length > 0) ||
       p.is_living === false;
+    const generation =
+      p.external_ids && p.external_ids.generation != null
+        ? Number(p.external_ids.generation)
+        : null;
 
     return {
       id: p.id,
@@ -73,6 +77,8 @@
       bio: p.bio || "",
       tags: Array.isArray(p.tags) ? p.tags : [],
       photoMediaId: p.photo_media_id || null,
+      externalIds: p.external_ids || {},
+      generation: Number.isFinite(generation) ? generation : null,
     };
   }
 

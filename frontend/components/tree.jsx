@@ -313,7 +313,7 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
           {canEdit && <button className="btn btn-sm btn-primary" onClick={() => setAddOpen(true)}><Icon name="plus" size={14}/>Adicionar pessoa</button>}
           {window.AddPersonModal && <window.AddPersonModal
             open={addOpen}
-            people={apiLayout ? tree.people : Object.values(F.people)}
+            people={useMockFallback ? Object.values(F.people) : (tree.people || [])}
             onClose={() => setAddOpen(false)}
             onSave={savePerson}
             saving={mutation.saving}

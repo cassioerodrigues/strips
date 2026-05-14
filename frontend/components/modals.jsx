@@ -792,7 +792,18 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   const peopleArr = sourcePeople.slice().sort((a,b) =>
     (b.birth?.year || 0) - (a.birth?.year || 0)
   );
-  const canSave = form.first && form.last && (form.relTo || sourcePeople.length === 0);
+  const isFirstPerson = sourcePeople.length === 0;
+  const missingRequired = [];
+  if (!String(form.first || "").trim()) missingRequired.push("primeiro nome");
+  if (!String(form.last || "").trim()) missingRequired.push("sobrenome");
+  if (!isFirstPerson && !form.relTo) missingRequired.push("pessoa de referência");
+  const canSave = missingRequired.length === 0;
+  const requiredHint = missingRequired.length > 0
+    ? "Preencha " + missingRequired.join(", ")
+    : "";
+  const modalSubtitle = isFirstPerson
+    ? "Cadastre a primeira pessoa para iniciar esta árvore."
+    : "Vincule essa pessoa a algum parente já existente para posicioná-la na árvore.";
 
   return (
     <ModalShell
@@ -801,7 +812,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
       size="lg"
       icon={<div className="event-modal-ic"><Icon name="user" size={20}/></div>}
       title="Adicionar pessoa à árvore"
-      subtitle="Vincule essa pessoa a algum parente já existente para posicioná-la na árvore."
+      subtitle={modalSubtitle}
     >
       <div className="modal-tabs">
         {[
@@ -845,7 +856,13 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
           </div>
         )}
 
-        {tab === "relation" && (
+        {tab === "relation" && isFirstPerson && (
+          <div className="api-empty">
+            Esta árvore ainda não tem pessoas. A primeira pessoa não precisa de vínculo familiar.
+          </div>
+        )}
+
+        {tab === "relation" && !isFirstPerson && (
           <>
             <div className="form-eyebrow">Como essa pessoa se relaciona com a sua árvore?</div>
             <div className="form-grid">
@@ -861,7 +878,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
                   ]}
                 />
               </Field>
-              <Field label="Pessoa de referência" span={4} required hint="quem já está na árvore">
+              <Field label="Pessoa de referência" span={4} required hint="quem já está na árvore" error={!form.relTo ? "Escolha uma pessoa já cadastrada." : null}>
                 <div className="people-picker" style={{maxHeight: 240, overflowY: "auto"}}>
                   {peopleArr.map(p => (
                     <button
@@ -991,7 +1008,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
             : readOnly
             ? <>{readOnlyReason || "Somente leitura"}</>
             : !canSave
-            ? <><span className="dirty-dot"/>Preencha nome, sobrenome e vínculo</>
+            ? <><span className="dirty-dot"/>{requiredHint}</>
             : <><Icon name="check" size={12}/>Pronto para adicionar</>}
         </div>
         <div className="modal-foot-actions">

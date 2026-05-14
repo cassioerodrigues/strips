@@ -1,0 +1,9 @@
+APP_ENV=production
+DATABASE_URL=postgresql://postgres.onbjspsksvpmhtpbicio:DPVGLIzKWzaljOIc@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
+SUPABASE_URL=https://onbjspsksvpmhtpbicio.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_7tTE_iL4z4rvl4Npla9xqg_QBZQpzHi
+SUPABASE_STORAGE_BUCKET=stirps-media
+CORS_ORIGINS=https://strips.cassiorodrigues.tech
+STIRPS_API_BASE_URL=/api
+STIRPS_SUPABASE_URL=https://onbjspsksvpmhtpbicio.supabase.co
+STIRPS_SUPABASE_ANON_KEY=sb_publishable_D7BsPZaIYtyL162KqzkuRg_EXeLAY_0

@@ -72,3 +72,22 @@ assert.equal(
   childSpouseLayout.nodes.spouse.y,
   "a spouse with unknown parents should follow their partner's derived generation",
 );
+
+const crossingLayout = context.window.treeLayout.computeApiTreeLayout(
+  [
+    { id: "p-left", first: "Alice", birth: { year: 1940 } },
+    { id: "p-right", first: "Bruno", birth: { year: 1941 } },
+    { id: "c-left", first: "Carol", birth: { year: 1970 } },
+    { id: "c-right", first: "Diego", birth: { year: 1971 } },
+  ],
+  [],
+  {
+    "c-left": ["p-left"],
+    "c-right": ["p-right"],
+  },
+);
+
+assert.ok(
+  crossingLayout.nodes["c-left"].x < crossingLayout.nodes["c-right"].x,
+  "children should follow the horizontal order of their parents to reduce crossing lines",
+);

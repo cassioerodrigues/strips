@@ -8,6 +8,7 @@ Sort keys são whitelistadas para nunca interpolar input externo no SQL.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any
 
@@ -146,7 +147,7 @@ def create_person(
                 payload.photo_media_id,
                 payload.family_search_id,
                 payload.gedcom_id,
-                payload.external_ids,
+                json.dumps(payload.external_ids or {}),
                 user_sub,
             ),
         )
@@ -201,6 +202,8 @@ def update_person(
         "family_search_id", "gedcom_id", "external_ids",
     }
     valid_fields = {k: v for k, v in fields.items() if k in allowed}
+    if "external_ids" in valid_fields:
+        valid_fields["external_ids"] = json.dumps(valid_fields["external_ids"] or {})
 
     if not valid_fields:
         return get_person(conn, person_id)

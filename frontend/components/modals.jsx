@@ -816,7 +816,7 @@ function AddEventModal({ open, person, people = null, event = null, onClose, onS
   );
 }
 
-function EditUnionModal({ open, person, partner, union, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function EditUnionModal({ open, person, partner, union, onClose, onSave, onDelete, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [form, setForm] = React.useState({
     unionId: "",
     year: "",
@@ -854,6 +854,15 @@ function EditUnionModal({ open, person, partner, union, onClose, onSave, saving 
     try {
       await onSave?.(form);
       onClose();
+    } catch (_) {
+      // O caller mantem a mensagem em `error`.
+    }
+  }
+
+  async function deleteUnion() {
+    if (readOnly || saving || !union || !onDelete) return;
+    try {
+      await onDelete(union);
     } catch (_) {
       // O caller mantem a mensagem em `error`.
     }
@@ -948,6 +957,11 @@ function EditUnionModal({ open, person, partner, union, onClose, onSave, saving 
             : <>Revise os dados do casamento</>}
         </div>
         <div className="modal-foot-actions">
+          {!readOnly && (
+            <button className="btn btn-ghost btn-danger-soft" onClick={deleteUnion} disabled={saving || !union}>
+              <Icon name="trash" size={14}/>{saving ? "Removendo..." : "Excluir união"}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
           {!readOnly && (
             <button className="btn btn-primary" onClick={save} disabled={saving || !union}>

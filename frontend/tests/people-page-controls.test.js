@@ -10,6 +10,10 @@ const profileSource = fs.readFileSync(
   path.resolve(__dirname, "..", "components", "profile.jsx"),
   "utf8",
 );
+const modalsSource = fs.readFileSync(
+  path.resolve(__dirname, "..", "components", "modals.jsx"),
+  "utf8",
+);
 
 const peoplePageStart = source.indexOf("function PeoplePage");
 const timelinePageStart = source.indexOf("function TimelinePage");
@@ -53,4 +57,25 @@ assert.match(
   profileSource,
   /onDelete=\{\(\) => deletePerson\(\{ skipConfirm: true \}\)\}/,
   "EditPersonModal should rely on its own confirmation and avoid a second prompt",
+);
+
+assert.doesNotMatch(
+  profileSource,
+  /Marcar encerrada|Marcar ativa|Remover união/,
+  "Spouse cards should not expose separate union action buttons",
+);
+assert.match(
+  profileSource,
+  /onPersonClick=\{canEdit && spouseUnion\s+\? \(\) => openUnionEditor\(spouseUnion\)\s+: onPersonClick\}/,
+  "Clicking an editable spouse card should open the union editor",
+);
+assert.match(
+  modalsSource,
+  /function EditUnionModal\(\{[^}]+onDelete/,
+  "EditUnionModal should receive a delete callback",
+);
+assert.match(
+  modalsSource,
+  /Excluir união/,
+  "EditUnionModal should expose union deletion inside the modal",
 );

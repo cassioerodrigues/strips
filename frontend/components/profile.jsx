@@ -264,15 +264,14 @@ function Profile({ personId, onBack, onPersonClick }) {
     setEventEditOpen(true);
   }
 
-  function toggleUnionStatus(union) {
-    const nextStatus = union.status === "ongoing" ? "ended" : "ongoing";
-    return runMutation(() => window.useTree.actions.updateUnion(p.id, union.id, { status: nextStatus }));
-  }
-
-
   function openUnionEditor(union) {
     setUnionToEdit(union);
     setUnionEditOpen(true);
+  }
+
+  function closeUnionEditor() {
+    setUnionEditOpen(false);
+    setUnionToEdit(null);
   }
 
   function cleanUnionInt(value, label) {
@@ -307,7 +306,9 @@ function Profile({ personId, onBack, onPersonClick }) {
 
   function deleteUnion(union) {
     if (!window.confirm("Remover esta união da árvore?")) return;
-    return runMutation(() => window.useTree.actions.deleteUnion(p.id, union.id));
+    return runMutation(() => window.useTree.actions.deleteUnion(p.id, union.id)).then(() => {
+      closeUnionEditor();
+    });
   }
 
   return (
@@ -396,8 +397,9 @@ function Profile({ personId, onBack, onPersonClick }) {
             person={p}
             partner={spouse}
             union={unionToEdit}
-            onClose={() => setUnionEditOpen(false)}
+            onClose={closeUnionEditor}
             onSave={saveUnionDetails}
+            onDelete={deleteUnion}
             saving={mutation.saving}
             error={mutation.error}
             readOnly={!canEdit}
@@ -470,21 +472,10 @@ function Profile({ personId, onBack, onPersonClick }) {
                       ? `Cônjuge · ${spouseUnion.start_year || "sem data"}${spouseUnion.start_place ? ", " + spouseUnion.start_place : ""}`
                       : "Cônjuge"}
                     people={[spouse]}
-                    onPersonClick={onPersonClick}
+                    onPersonClick={canEdit && spouseUnion
+                      ? () => openUnionEditor(spouseUnion)
+                      : onPersonClick}
                   />
-                  {canEdit && spouseUnion && (
-                    <div className="meta-row" style={{marginTop: 8}}>
-                      <button className="btn btn-sm btn-ghost" onClick={() => openUnionEditor(spouseUnion)} disabled={mutation.saving}>
-                        <Icon name="edit" size={13}/>Editar casamento
-                      </button>
-                      <button className="btn btn-sm btn-ghost" onClick={() => toggleUnionStatus(spouseUnion)} disabled={mutation.saving}>
-                        <Icon name="edit" size={13}/>{spouseUnion.status === "ongoing" ? "Marcar encerrada" : "Marcar ativa"}
-                      </button>
-                      <button className="btn btn-sm btn-ghost btn-danger-soft" onClick={() => deleteUnion(spouseUnion)} disabled={mutation.saving}>
-                        <Icon name="trash" size={13}/>Remover união
-                      </button>
-                    </div>
-                  )}
                 </>
               )}
               <RelationGroup label="Irmãos" people={siblings} onPersonClick={onPersonClick}/>

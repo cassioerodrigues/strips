@@ -152,9 +152,49 @@
     return groups;
   }
 
+
+  function orderGroupsToReduceCrossings(groups, relationsByChild) {
+    const parentIndexById = {};
+    return groups.map(function (group) {
+      const orderedPeople = group.people.slice().sort(function (a, b) {
+        function score(person) {
+          const parentIds = (relationsByChild && relationsByChild[person.id]) || [];
+          const indices = parentIds
+            .map(function (id) { return parentIndexById[id]; })
+            .filter(function (value) { return value != null; });
+          if (indices.length === 0) return Number.POSITIVE_INFINITY;
+          return indices.reduce(function (sum, value) { return sum + value; }, 0) / indices.length;
+        }
+
+        const scoreA = score(a);
+        const scoreB = score(b);
+        if (scoreA !== scoreB) return scoreA - scoreB;
+
+        const byYear = yearOf(a) - yearOf(b);
+        if (byYear !== 0) return byYear;
+        const an = ((a.first || "") + " " + (a.last || "")).trim();
+        const bn = ((b.first || "") + " " + (b.last || "")).trim();
+        return an.localeCompare(bn);
+      });
+
+      orderedPeople.forEach(function (person, index) {
+        parentIndexById[person.id] = index;
+      });
+
+      return {
+        key: group.key,
+        generation: group.generation,
+        people: orderedPeople,
+      };
+    });
+  }
+
   function computeApiTreeLayout(people, unions, relationsByChild) {
     const layout = { nodes: {}, links: [], groups: [] };
-    const groups = deriveGenerationGroups(people, unions, relationsByChild);
+    const groups = orderGroupsToReduceCrossings(
+      deriveGenerationGroups(people, unions, relationsByChild),
+      relationsByChild,
+    );
     const maxCols = Math.max.apply(
       null,
       groups.map(function (g) { return Math.max(g.people.length, 1); }).concat([1]),

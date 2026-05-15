@@ -347,6 +347,9 @@ function Profile({ personId, onBack, onPersonClick }) {
           {window.EditPersonModal && <window.EditPersonModal
             open={editOpen}
             person={p}
+            people={useApi ? tree.people : Object.values(F.people)}
+            unions={useApi ? tree.unions : F.unions}
+            timeline={useApi ? tree.timeline : F.timeline}
             onClose={() => setEditOpen(false)}
             onSave={savePerson}
             onDelete={() => deletePerson({ skipConfirm: true })}
@@ -362,6 +365,8 @@ function Profile({ personId, onBack, onPersonClick }) {
             open={eventOpen}
             person={p}
             people={useApi ? tree.people : Object.values(F.people)}
+            unions={useApi ? tree.unions : F.unions}
+            timeline={useApi ? tree.timeline : F.timeline}
             onClose={() => setEventOpen(false)}
             onSave={saveEvent}
             saving={mutation.saving}
@@ -373,6 +378,8 @@ function Profile({ personId, onBack, onPersonClick }) {
             open={eventEditOpen}
             person={p}
             people={useApi ? tree.people : Object.values(F.people)}
+            unions={useApi ? tree.unions : F.unions}
+            timeline={useApi ? tree.timeline : F.timeline}
             event={eventToEdit}
             onClose={() => { setEventEditOpen(false); setEventToEdit(null); }}
             onSave={saveEditedEvent}
@@ -397,6 +404,9 @@ function Profile({ personId, onBack, onPersonClick }) {
             person={p}
             partner={spouse}
             union={unionToEdit}
+            people={useApi ? tree.people : Object.values(F.people)}
+            unions={useApi ? tree.unions : F.unions}
+            timeline={useApi ? tree.timeline : F.timeline}
             onClose={closeUnionEditor}
             onSave={saveUnionDetails}
             onDelete={deleteUnion}

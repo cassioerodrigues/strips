@@ -57,6 +57,56 @@ function TextInput({ value, onChange, placeholder, type = "text" }) {
   );
 }
 
+function normalizePlaceText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function addPlaceSuggestion(map, value) {
+  const place = normalizePlaceText(value);
+  if (!place) return;
+  const key = place.toLocaleLowerCase("pt-BR");
+  if (!map[key]) map[key] = place;
+}
+
+function collectPlaceSuggestions({ people = [], unions = [], timeline = [], extra = [] } = {}) {
+  const map = {};
+  people.forEach(p => {
+    addPlaceSuggestion(map, p?.birth?.place);
+    addPlaceSuggestion(map, p?.death?.place);
+  });
+  unions.forEach(u => addPlaceSuggestion(map, u?.start_place || u?.place));
+  timeline.forEach(item => addPlaceSuggestion(map, item?.place));
+  extra.forEach(place => addPlaceSuggestion(map, place));
+  return Object.values(map).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+}
+
+function PlaceInput({ value, onChange, placeholder, suggestions = [] }) {
+  const listId = React.useMemo(() => "place-suggestions-" + Math.random().toString(36).slice(2), []);
+  const options = React.useMemo(() => {
+    const map = {};
+    suggestions.forEach(place => addPlaceSuggestion(map, place));
+    addPlaceSuggestion(map, value);
+    return Object.values(map).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+  }, [suggestions, value]);
+
+  return (
+    <>
+      <input
+        className="input"
+        type="text"
+        value={value || ""}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        list={listId}
+        autoComplete="off"
+      />
+      <datalist id={listId}>
+        {options.map(place => <option key={place} value={place}/>)}
+      </datalist>
+    </>
+  );
+}
+
 function TextArea({ value, onChange, placeholder, rows = 4 }) {
   return (
     <textarea
@@ -181,7 +231,7 @@ function TagsInput({ value = [], onChange }) {
 // EDIT PERSON MODAL
 // ============================================================
 
-function EditPersonModal({ open, person, onClose, onSave, onDelete, onUploadBirthDocument, birthDocuments = [], uploadingBirthDocument = false, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function EditPersonModal({ open, person, people = null, unions = null, timeline = null, onClose, onSave, onDelete, onUploadBirthDocument, birthDocuments = [], uploadingBirthDocument = false, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [form, setForm] = React.useState(null);
   const [tab, setTab] = React.useState("identity");
   const [dirty, setDirty] = React.useState(false);
@@ -221,6 +271,12 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, onUploadBirt
 
   if (!form) return null;
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setDirty(true); };
+  const sourcePeople = people || (person ? [person] : []);
+  const placeSuggestions = collectPlaceSuggestions({
+    people: sourcePeople,
+    unions: unions || (window.FAMILY && window.FAMILY.unions) || [],
+    timeline: timeline || (window.FAMILY && window.FAMILY.timeline) || [],
+  });
 
   async function save() {
     if (readOnly || saving) return;
@@ -331,7 +387,7 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, onUploadBirt
               />
             </Field>
             <Field label="Cidade de nascimento" span={2}>
-              <TextInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Treviso"/>
+              <PlaceInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Treviso" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
               <TextInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Itália"/>
@@ -411,7 +467,7 @@ function EditPersonModal({ open, person, onClose, onSave, onDelete, onUploadBirt
                   />
                 </Field>
                 <Field label="Local" span={2}>
-                  <TextInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder="Caxias do Sul, RS"/>
+                  <PlaceInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder="Caxias do Sul, RS" suggestions={placeSuggestions}/>
                 </Field>
                 <Field label="Causa" span={2} hint="opcional">
                   <TextInput value={form.cause} onChange={v => set("cause", v)} placeholder=""/>
@@ -516,7 +572,7 @@ function eventTypeToFormType(event) {
   return EVENT_TYPES.some(e => e.id === type) ? type : "custom";
 }
 
-function AddEventModal({ open, person, people = null, event = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function AddEventModal({ open, person, people = null, unions = null, timeline = null, event = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [step, setStep] = React.useState(1);
   const [form, setForm] = React.useState({
     type: "marriage",
@@ -586,6 +642,12 @@ function AddEventModal({ open, person, people = null, event = null, onClose, onS
   const peopleById = {};
   sourcePeople.forEach(p => { peopleById[p.id] = p; });
   const candidates = person ? sourcePeople.filter(x => x.id !== person.id) : [];
+  const placeSuggestions = collectPlaceSuggestions({
+    people: sourcePeople,
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+    extra: [event && event.place],
+  });
   const eventDef = EVENT_TYPES.find(e => e.id === form.type);
   const editing = !!(event && event.id);
 
@@ -661,7 +723,7 @@ function AddEventModal({ open, person, people = null, event = null, onClose, onS
               />
             </Field>
             <Field label="Cidade / local" span={2}>
-              <TextInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul"/>
+              <PlaceInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
               <TextInput value={form.country} onChange={v => set("country", v)} placeholder="Brasil"/>
@@ -816,7 +878,7 @@ function AddEventModal({ open, person, people = null, event = null, onClose, onS
   );
 }
 
-function EditUnionModal({ open, person, partner, union, onClose, onSave, onDelete, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function EditUnionModal({ open, person, partner, union, people = null, unions = null, timeline = null, onClose, onSave, onDelete, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const [form, setForm] = React.useState({
     unionId: "",
     year: "",
@@ -848,6 +910,13 @@ function EditUnionModal({ open, person, partner, union, onClose, onSave, onDelet
   }, [open, union && union.id]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const F = window.FAMILY || {};
+  const placeSuggestions = collectPlaceSuggestions({
+    people: people || [person, partner].filter(Boolean),
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+    extra: [union && (union.start_place || union.place)],
+  });
 
   async function save() {
     if (readOnly || saving || !union) return;
@@ -923,7 +992,7 @@ function EditUnionModal({ open, person, partner, union, onClose, onSave, onDelet
           </Field>
 
           <Field label="Cidade / local" span={2}>
-            <TextInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul"/>
+            <PlaceInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul" suggestions={placeSuggestions}/>
           </Field>
 
           <Field label="Status" span={2}>
@@ -983,7 +1052,7 @@ window.EditUnionModal = EditUnionModal;
 // ADD PERSON MODAL
 // ============================================================
 
-function AddPersonModal({ open, people = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
+function AddPersonModal({ open, people = null, unions = null, timeline = null, onClose, onSave, saving = false, error = null, readOnly = false, readOnlyReason = "" }) {
   const F = window.FAMILY;
   const [form, setForm] = React.useState(null);
   const [tab, setTab] = React.useState("basic");
@@ -1029,6 +1098,11 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
   const peopleArr = sourcePeople.slice().sort((a,b) =>
     (b.birth?.year || 0) - (a.birth?.year || 0)
   );
+  const placeSuggestions = collectPlaceSuggestions({
+    people: sourcePeople,
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+  });
   const isFirstPerson = sourcePeople.length === 0;
   const missingRequired = [];
   if (!String(form.first || "").trim()) missingRequired.push("primeiro nome");
@@ -1184,7 +1258,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
               />
             </Field>
             <Field label="Cidade" span={2}>
-              <TextInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Caxias do Sul"/>
+              <PlaceInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Caxias do Sul" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
               <TextInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Brasil"/>
@@ -1212,7 +1286,7 @@ function AddPersonModal({ open, people = null, onClose, onSave, saving = false, 
                   />
                 </Field>
                 <Field label="Local" span={4}>
-                  <TextInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder=""/>
+                  <PlaceInput value={form.deathPlace} onChange={v => set("deathPlace", v)} placeholder="" suggestions={placeSuggestions}/>
                 </Field>
               </>
             )}

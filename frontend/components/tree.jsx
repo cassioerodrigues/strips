@@ -148,35 +148,55 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const F = window.FAMILY || { people: {}, unions: [] };
   const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
   const useMockFallback = tree.status === "unavailable";
-  const mockLayout = React.useMemo(
-    () => useMockFallback ? computeLayout(F.rootUserId) : { nodes: {}, links: [] },
-    [useMockFallback],
-  );
   const apiCanRender =
     window.treeLayout &&
     (tree.status === "ready" || tree.status === "error") &&
     Array.isArray(tree.people) &&
     tree.people.length > 0;
-  const [rootPersonId, setRootPersonId] = React.useState(null);
-  // Auto-set root to logged-in user's person on first load
-  const myPersonId = tree.myPersonId || null;
-  React.useEffect(() => {
-    if (myPersonId && rootPersonId === null) {
-      setRootPersonId(myPersonId);
+  const [rootPersonId, setRootPersonId] = React.useState(() => F.rootUserId || Object.keys(F.people || {})[0] || null);
+  const availableRootIds = React.useMemo(
+    () => apiCanRender
+      ? tree.people.map(p => p.id).filter(Boolean)
+      : useMockFallback
+      ? Object.keys(F.people || {})
+      : [],
+    [apiCanRender, useMockFallback, tree.people, F.people],
+  );
+  const fallbackRootId = React.useMemo(() => {
+    if (apiCanRender) {
+      if (tree.myPersonId && availableRootIds.includes(tree.myPersonId)) return tree.myPersonId;
+      return availableRootIds[0] || null;
     }
-  }, [myPersonId]);
+    if (!useMockFallback) return null;
+    if (F.rootUserId && availableRootIds.includes(F.rootUserId)) return F.rootUserId;
+    return availableRootIds[0] || null;
+  }, [apiCanRender, useMockFallback, tree.myPersonId, availableRootIds, F.rootUserId]);
+  const selectedRootId = rootPersonId && availableRootIds.includes(rootPersonId)
+    ? rootPersonId
+    : fallbackRootId;
+
+  const mockLayout = React.useMemo(
+    () => useMockFallback ? computeLayout(selectedRootId) : { nodes: {}, links: [] },
+    [useMockFallback, selectedRootId],
+  );
+  // Sempre mantém uma pessoa central selecionada quando há pessoas na árvore.
+  React.useEffect(() => {
+    if (selectedRootId && rootPersonId !== selectedRootId) {
+      setRootPersonId(selectedRootId);
+    }
+  }, [selectedRootId, rootPersonId]);
   const apiLayout = React.useMemo(() => {
     if (!apiCanRender) return null;
     return window.treeLayout.computeApiTreeLayout(
       tree.people,
       tree.unions || [],
       tree.relationsByChild || {},
-      rootPersonId || undefined,
+      selectedRootId,
     );
-  }, [apiCanRender, tree.people, tree.unions, tree.relationsByChild, rootPersonId]);
+  }, [apiCanRender, tree.people, tree.unions, tree.relationsByChild, selectedRootId]);
   const layout = apiLayout || mockLayout;
   const peopleById = apiLayout ? (tree.peopleById || {}) : F.people;
-  const focusId = rootPersonId || (apiLayout ? (tree.people[0] && tree.people[0].id) : "p_helena");
+  const focusId = selectedRootId;
   const [zoom, setZoom] = React.useState(0.85);
   const [pan, setPan] = React.useState({ x: 60, y: 40 });
   const [hover, setHover] = React.useState(null);
@@ -324,11 +344,10 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
         <div className="tree-toolbar-left">
           <button className="chip"><Icon name="filter" size={13}/>Filtros</button>
           <button className="chip"><Icon name="calendar" size={13}/>Por época</button>
-          {rootPersonId && peopleById[rootPersonId] && (
+          {selectedRootId && peopleById[selectedRootId] && (
             <span className="chip chip-root-indicator">
               <Icon name="pin" size={13}/>
-              {peopleById[rootPersonId].first} {peopleById[rootPersonId].last}
-              <button className="chip-close" onClick={() => setRootPersonId(null)} title="Voltar à visão padrão">✕</button>
+              {peopleById[selectedRootId].first} {peopleById[selectedRootId].last}
             </span>
           )}
         </div>
@@ -337,6 +356,8 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
           {window.AddPersonModal && <window.AddPersonModal
             open={addOpen}
             people={useMockFallback ? Object.values(F.people) : (tree.people || [])}
+            unions={useMockFallback ? F.unions : (tree.unions || [])}
+            timeline={useMockFallback ? F.timeline : (tree.timeline || [])}
             onClose={() => setAddOpen(false)}
             onSave={savePerson}
             saving={mutation.saving}
@@ -418,10 +439,10 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
               x={n.x}
               y={n.y}
               focused={n.id === focusId}
-              isRoot={n.id === rootPersonId}
+              isRoot={n.id === selectedRootId}
               dimmed={!apiLayout && isDimmed(n.id)}
               onClick={onPersonClick}
-              onSetRoot={(id) => setRootPersonId(prev => prev === id ? null : id)}
+              onSetRoot={(id) => setRootPersonId(id)}
               onHover={setHover}
             />
           ))}

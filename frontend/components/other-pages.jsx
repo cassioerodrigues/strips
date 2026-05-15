@@ -334,6 +334,8 @@ function PeoplePage({ onPersonClick }) {
       {window.AddPersonModal && <window.AddPersonModal
         open={addOpen}
         people={source}
+        unions={tree.status === "ready" ? tree.unions : F.unions}
+        timeline={tree.status === "ready" ? tree.timeline : F.timeline}
         onClose={() => setAddOpen(false)}
         onSave={saveNewPerson}
         saving={mutation.saving}
@@ -344,6 +346,9 @@ function PeoplePage({ onPersonClick }) {
       {window.EditPersonModal && <window.EditPersonModal
         open={!!editPerson}
         person={editPerson}
+        people={source}
+        unions={tree.status === "ready" ? tree.unions : F.unions}
+        timeline={tree.status === "ready" ? tree.timeline : F.timeline}
         onClose={() => setEditPerson(null)}
         onSave={saveEditedPerson}
         onDelete={deleteEditedPerson}

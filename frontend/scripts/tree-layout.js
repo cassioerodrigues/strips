@@ -1,47 +1,58 @@
-// tree-layout.js — Port of the "relatives-tree" algorithm by SanichKotikov
-// (https://github.com/SanichKotikov/relatives-tree) adapted to the Stirps
-// data model (people[], unions[], relationsByChild{}).
+// tree-layout.js — Porta do algoritmo "relatives-tree" por SanichKotikov
+// (https://github.com/SanichKotikov/relatives-tree) adaptado ao modelo de
+// dados do Stirps (people[], unions[], relationsByChild{}).
 //
-// The algorithm computes layout in abstract grid units then converts to pixels.
-// It groups persons into "families" (parent-unit + child-units), positions them
-// by expanding from a root person outward in 3 directions (middle, parents,
-// children), then corrects overlaps and normalizes coordinates.
+// O algoritmo calcula o layout em unidades abstratas de grid e depois
+// converte para pixels. Agrupa pessoas em "famílias" (unidade-pais +
+// unidades-filhos), posiciona expandindo a partir de uma pessoa raiz
+// em 3 direções (central, ancestral, descendente), corrige sobreposições
+// e normaliza coordenadas.
 (function () {
   "use strict";
 
   // =========================================================================
-  // CONSTANTS
+  // CONSTANTES
   // =========================================================================
   var NODE_W = 220;
   var NODE_H = 86;
 
-  // Abstract grid size (each node = SIZE units wide, SIZE units tall)
+  // Tamanho do grid abstrato (cada nó = SIZE unidades de largura e altura)
   var SIZE = 2;
   var HALF_SIZE = SIZE / 2;
   var NODES_IN_COUPLE = 2;
 
   // =========================================================================
-  // UTILITY FUNCTIONS
+  // FUNÇÕES UTILITÁRIAS
   // =========================================================================
+
+  // Retorna uma função que extrai a propriedade 'name' de um objeto.
+  // Uso: array.map(prop("id")) → extrai o campo id de cada elemento.
   function prop(name) {
     return function (item) { return item[name]; };
   }
 
+  // Retorna um filtro que verifica se o item tem o id especificado.
   function withId(id) {
     return function (item) { return item.id === id; };
   }
 
+  // Retorna um filtro que verifica se o item.id está (ou não) na lista de ids.
+  // Se include=true, retorna true quando o id está na lista; se false, o inverso.
   function withIds(ids, include) {
     if (include === undefined) include = true;
     return function (item) { return (ids.indexOf(item.id) !== -1) === include; };
   }
 
+  // Callback para Array.filter() que remove duplicatas de um array.
   function unique(item, index, arr) {
     return arr.indexOf(item) === index;
   }
 
+  // Comparador para ordenação numérica crescente.
   function inAscOrder(v1, v2) { return v1 - v2; }
 
+  // Compõe múltiplas funções em sequência (pipeline).
+  // pipe(f, g, h)(x) equivale a h(g(f(x))).
   function pipe() {
     var fns = Array.prototype.slice.call(arguments);
     return function (init) {
@@ -49,14 +60,17 @@
     };
   }
 
+  // Retorna o menor valor de um array numérico (0 se vazio).
   function arrMin(arr) {
     return arr.length === 0 ? 0 : Math.min.apply(null, arr);
   }
 
+  // Retorna o maior valor de um array numérico (0 se vazio).
   function arrMax(arr) {
     return arr.length === 0 ? 0 : Math.max.apply(null, arr);
   }
 
+  // Converte um array de objetos (com .id) em um mapa { id → objeto }.
   function toMap(items) {
     var m = {};
     items.forEach(function (item) {
@@ -65,22 +79,32 @@
     return m;
   }
 
+  // Retorna um filtro que verifica se item.type está entre os tipos fornecidos.
+  // Uso: filter(withRelType("blood", "adopted")).
   function withRelType() {
     var types = Array.prototype.slice.call(arguments);
     return function (item) { return types.indexOf(item.type) !== -1; };
   }
 
+  // Comparador de ordenação por gênero: coloca o gênero alvo por último.
+  // Usado para posicionar o casal na ordem correta (ex: pai à esquerda, mãe à direita).
   function byGender(targetGender) {
     return function (a, b) { return b.gender !== targetGender ? -1 : 1; };
   }
 
+  // Verifica se um nó tem pais de tipos diferentes (ex: biológico + adotivo).
   function hasDiffParents(node) {
     return node.parents.map(prop("type")).filter(unique).length > 1;
   }
 
   // =========================================================================
-  // UNIT HELPERS
+  // HELPERS DE UNIDADE (Unit)
+  // Uma "unidade" representa 1 ou 2 pessoas (solteiro ou casal) dentro de
+  // uma família. Contém: fid (id da família), nodes (pessoas), pos (posição
+  // horizontal em unidades de grid), child (se é unidade filha).
   // =========================================================================
+
+  // Cria uma nova unidade com os nós fornecidos, associada à família fid.
   function newUnit(fid, nodes, isChild) {
     return {
       fid: fid,
@@ -90,86 +114,109 @@
     };
   }
 
+  // Retorna os IDs dos nós (pessoas) de uma unidade.
   function nodeIds(unit) { return unit.nodes.map(prop("id")); }
+  // Retorna quantas pessoas estão na unidade (1 = solteiro, 2 = casal).
   function nodeCount(unit) { return unit.nodes.length; }
+  // Verifica se algum nó da unidade tem filhos.
   function hasChildrenFn(unit) { return unit.nodes.some(function (n) { return n.children.length > 0; }); }
+  // Calcula a posição do lado direito da unidade no grid.
   function rightSide(unit) { return unit.pos + nodeCount(unit) * SIZE; }
+  // Retorna um comparador que verifica se outra unidade contém os mesmos nós.
   function sameAs(target) {
     var key = nodeIds(target).join("");
     return function (unit) { return nodeIds(unit).join("") === key; };
   }
+  // Calcula a posição X absoluta de uma unidade dentro da sua família.
   function getUnitX(family, unit) { return family.X + unit.pos; }
+  // Extrai todos os nós (pessoas) de um array de unidades.
   function unitsToNodes(units) {
     var result = [];
     units.forEach(function (u) { u.nodes.forEach(function (n) { result.push(n); }); });
     return result;
   }
 
+  // Posiciona as unidades sequencialmente: cada uma começa onde a anterior termina.
   function arrangeInOrder(units) {
     units.forEach(function (unit, idx, self) {
       unit.pos = idx === 0 ? 0 : rightSide(self[idx - 1]);
     });
   }
 
+  // Desloca todas as unidades pelo valor 'shift' (ajuste horizontal em lote).
   function correctUnitsShift(units, shift) {
     units.forEach(function (unit) { unit.pos += shift; });
   }
 
   // =========================================================================
-  // FAMILY HELPERS
+  // HELPERS DE FAMÍLIA
+  // Uma "família" agrupa unidades de pais (parents[]) e unidades de filhos
+  // (children[]). Tem tipo (root/child/parent), posição (X,Y) e referências
+  // para famílias pai (pid) e filha (cid) na cadeia hierárquica.
   // =========================================================================
-  var FAMILY_TYPE_ROOT = "root";
-  var FAMILY_TYPE_CHILD = "child";
-  var FAMILY_TYPE_PARENT = "parent";
+  var FAMILY_TYPE_ROOT = "root";     // Família raiz (geração do root)
+  var FAMILY_TYPE_CHILD = "child";   // Família de descendentes
+  var FAMILY_TYPE_PARENT = "parent"; // Família de ancestrais
 
+  // Cria uma nova família com id, tipo e flag indicando se é a família principal.
   function newFamily(id, type, main) {
     return {
       id: id,
       type: type,
       main: main || false,
-      Y: 0,
-      X: 0,
-      pid: null, // parent family ID
-      cid: null, // child family ID
-      parents: [],
-      children: [],
+      Y: 0,                // Posição Y (linha/geração) no grid abstrato
+      X: 0,                // Posição X (coluna) no grid abstrato
+      pid: null,           // ID da família pai (acima)
+      cid: null,           // ID da família filha (abaixo)
+      parents: [],         // Unidades de pais
+      children: [],        // Unidades de filhos
     };
   }
 
+  // Filtro que verifica se a família é de um dos tipos especificados.
   function withFamilyType() {
     var types = Array.prototype.slice.call(arguments);
     return function (item) { return types.indexOf(item.type) !== -1; };
   }
 
+  // Calcula a largura total da família (em unidades de grid).
   function widthOf(family) {
     var all = family.parents.concat(family.children);
     return all.length === 0 ? 0 : arrMax(all.map(rightSide));
   }
 
+  // Calcula a altura da família: cada linha (pais/filhos) ocupa SIZE unidades.
   function heightOf(family) {
     var rows = [family.parents.length, family.children.length].filter(Boolean).length;
     return rows * SIZE;
   }
 
+  // Retorna a posição X do lado direito da família.
   function rightOf(family) { return family.X + widthOf(family); }
+  // Retorna a posição Y do fundo da família.
   function bottomOf(family) { return family.Y + heightOf(family); }
 
+  // Conta o total de nós (pessoas) em todas as unidades do array.
   function unitNodesCount(units) {
     return units.reduce(function (acc, u) { return acc + nodeCount(u); }, 0);
   }
 
+  // Calcula a posição X central dos pais (ponto de conexão para conectores).
   function getParentsX(family, unit) {
     return unit ? getUnitX(family, unit) + nodeCount(unit) : 0;
   }
 
   // =========================================================================
   // setDefaultUnitShift
+  // Posiciona as unidades de pais e filhos de uma família, centralizando
+  // a linha menor em relação à maior e normalizando para que nenhuma
+  // posição fique negativa.
   // =========================================================================
   function setDefaultUnitShift(family) {
     arrangeInOrder(family.parents);
     arrangeInOrder(family.children);
 
-    // Center the smaller row relative to the larger
+    // Centraliza a linha menor em relação à maior
     var diff = unitNodesCount(family.parents) - unitNodesCount(family.children);
     if (diff > 0) correctUnitsShift(family.children, diff);
     else if (diff < 0) correctUnitsShift(family.parents, Math.abs(diff));
@@ -184,7 +231,11 @@
 
   // =========================================================================
   // arrangeParentsIn
+  // Reposiciona a unidade de pais para ficar centralizada acima dos seus
+  // filhos. Calcula o ponto médio das posições dos filhos e ajusta.
   // =========================================================================
+
+  // Calcula as posições dos filhos que correspondem aos IDs fornecidos.
   function calcShifts(units, ids) {
     var result = [];
     units.forEach(function (unit) {
@@ -197,12 +248,15 @@
     return result;
   }
 
+  // Calcula o valor médio entre o primeiro e o último valor de um array.
   function middleValue(values) {
     if (values.length === 0) return 0;
     var result = (values[0] + values[values.length - 1]) / 2;
     return isNaN(result) ? 0 : result;
   }
 
+  // Centraliza os pais acima dos seus filhos na família.
+  // Ignora famílias multi-parent (tratadas em createParentFamily).
   function arrangeParentsIn(family) {
     if (!family.parents.length || family.children.length <= 1) return;
     // Skip multi-parent families — their positioning is handled in createParentFamily
@@ -216,7 +270,9 @@
   }
 
   // =========================================================================
-  // STORE
+  // STORE (Armazena o estado da árvore)
+  // Contém todos os nós (pessoas) e famílias criadas durante o cálculo.
+  // O rootId define a pessoa central a partir da qual a árvore se expande.
   // =========================================================================
   function Store(nodes, rootId) {
     var rootNode = null;
@@ -231,14 +287,19 @@
     this.root = this.nodes[rootId];
   }
 
+  // Gera o próximo ID sequencial para famílias.
   Store.prototype.getNextId = function () { return ++this._nextId; };
+  // Retorna um nó (pessoa) pelo ID.
   Store.prototype.getNode = function (id) { return this.nodes[id]; };
+  // Retorna múltiplos nós pelos IDs (ignora IDs inválidos).
   Store.prototype.getNodes = function (ids) {
     var self = this;
     return ids.map(function (id) { return self.nodes[id]; }).filter(Boolean);
   };
+  // Retorna uma família pelo ID.
   Store.prototype.getFamily = function (id) { return this.families[id]; };
 
+  // Getter: retorna todas as famílias como array.
   Object.defineProperty(Store.prototype, "familiesArray", {
     get: function () {
       var self = this;
@@ -246,12 +307,14 @@
     },
   });
 
+  // Getter: retorna apenas as famílias do tipo ROOT.
   Object.defineProperty(Store.prototype, "rootFamilies", {
     get: function () {
       return this.familiesArray.filter(withFamilyType(FAMILY_TYPE_ROOT));
     },
   });
 
+  // Getter: retorna a família raiz principal (a marcada como main, ou a primeira).
   Object.defineProperty(Store.prototype, "rootFamily", {
     get: function () {
       return this.rootFamilies.filter(function (f) { return f.main; })[0] || this.rootFamilies[0];
@@ -260,8 +323,14 @@
 
   // =========================================================================
   // getSpouseNodesFunc
+  // Retorna uma função que, dado um array de pais, separa os cônjuges em:
+  //   - middle: o casal principal
+  //   - left: outros cônjuges do primeiro parceiro
+  //   - right: outros cônjuges do segundo parceiro
+  // Usado para posicionar casamentos múltiplos na árvore.
   // =========================================================================
   function getSpouseNodesFunc(store) {
+    // Encontra o cônjuge principal de uma pessoa (casado > mais filhos em comum).
     function getCoupleNodes(target) {
       var spouse = null;
       var married = target.spouses.filter(withRelType("married"))[0];
@@ -297,6 +366,9 @@
 
   // =========================================================================
   // createChildUnitsFunc
+  // Retorna uma função que cria as unidades filhas para uma pessoa.
+  // Para cada filho, cria a unidade central (com cônjuge se houver) e
+  // unidades laterais para cônjuges adicionais.
   // =========================================================================
   function createChildUnitsFunc(store) {
     var getSpouseNodes = getSpouseNodesFunc(store);
@@ -311,8 +383,13 @@
   }
 
   // =========================================================================
-  // MIDDLE DIRECTION
+  // DIREÇÃO CENTRAL (Middle Direction)
+  // Cria as famílias da geração do root person. Se o root tem pais, cria a
+  // família com pais + irmãos. Se não tem pais, cria uma família só com o
+  // root como filho. Também trata casamentos múltiplos dos pais do root.
   // =========================================================================
+
+  // Cria família quando o root não tem pais (ele é a raiz absoluta).
   function createFamilyWithoutParents(store) {
     var family = newFamily(store.getNextId(), FAMILY_TYPE_ROOT, true);
     var createChildUnits = createChildUnitsFunc(store);
@@ -321,6 +398,8 @@
     return [family];
   }
 
+  // Fábrica de funções que cria famílias com pais e seus filhos em comum.
+  // Ordena irmãos por ano de nascimento (mais velho à esquerda, mais novo à direita).
   function createFamilyFunc_children(store) {
     var createChildUnits = createChildUnitsFunc(store);
 
@@ -329,7 +408,7 @@
       var rels = first.children.filter(function (rel) {
         return !second || second.children.some(withId(rel.id));
       });
-      // Sort siblings by birth year (eldest left, youngest right)
+      // Ordena irmãos por ano de nascimento (mais velho à esquerda, mais novo à direita)
       rels.sort(function (a, b) {
         var na = store.getNode(a.id), nb = store.getNode(b.id);
         var ya = (na && na.birthYear) || 9999;
@@ -358,6 +437,7 @@
     };
   }
 
+  // Cria as famílias de sangue do root (pais biológicos + casamentos extras).
   function createBloodFamilies(store) {
     var createFamily = createFamilyFunc_children(store);
     var mainFamily = createFamily(store.root.parents.map(prop("id")), FAMILY_TYPE_ROOT, true);
@@ -373,6 +453,8 @@
     return [mainFamily];
   }
 
+  // Cria famílias separadas para pais de tipos diferentes (biológico vs adotivo).
+  // Trata sobreposição de filhos compartilhados entre as duas famílias.
   function createDiffTypeFamilies(store) {
     var createFamily = createFamilyFunc_children(store);
     var bloodParentIDs = store.root.parents.filter(withRelType("blood")).map(prop("id"));
@@ -381,7 +463,7 @@
     var bloodFamily = createFamily(bloodParentIDs, FAMILY_TYPE_ROOT, true);
     var adoptedFamily = createFamily(adoptedParentIDs);
 
-    // correctOverlaps between blood and adopted
+    // Corrige sobreposição entre família biológica e adotiva
     var bloodChildNodes = unitsToNodes(bloodFamily.children);
     var adoptedChildNodes = unitsToNodes(adoptedFamily.children);
     var sharedIDs = bloodChildNodes
@@ -407,6 +489,9 @@
     return [bloodFamily, adoptedFamily];
   }
 
+  // Ponto de entrada da direção central: decide qual estratégia usar
+  // (sem pais / pais de tipos diferentes / pais normais) e posiciona
+  // as famílias da esquerda para a direita.
   function inMiddleDirection(store) {
     var families;
     if (store.root.parents.length) {
@@ -417,7 +502,7 @@
       families = createFamilyWithoutParents(store);
     }
 
-    // arrange families left to right
+    // Posiciona famílias da esquerda para a direita
     for (var i = 1; i < families.length; i++) {
       families[i].X = rightOf(families[i - 1]);
     }
@@ -430,11 +515,14 @@
   }
 
   // =========================================================================
-  // CHILDREN DIRECTION
+  // DIREÇÃO DESCENDENTE (Children Direction)
+  // Expande a árvore para baixo: para cada unidade com filhos, cria uma
+  // nova família CHILD e ajusta posições propagando mudanças para cima.
   // =========================================================================
   function inChildDirection(store) {
     var createFamily = createFamilyFunc_children(store);
 
+    // Atualiza Y e X da nova família baseado na família pai.
     function updateFamily(family, parentUnit) {
       var parentFamily = store.getFamily(parentUnit.fid);
       family.pid = parentFamily.id;
@@ -442,6 +530,8 @@
       family.X = getUnitX(parentFamily, parentUnit);
     }
 
+    // Ajusta a posição de uma família filha dentro da família pai,
+    // deslocando unidades à direita se necessário para evitar sobreposição.
     function arrangeNextFamily(family, nextFamily, right) {
       var unit = family.parents[0];
       var index = -1;
@@ -459,13 +549,14 @@
       var nextIdx = index + 1;
       if (nextFamily.children[nextIdx]) {
         var shift = right - getUnitX(nextFamily, nextFamily.children[nextIdx]);
-        // In multi-parent families, add extra spacing between sibling subtrees
-        // so their connector buses don't overlap horizontally.
+        // Em famílias multi-parent, adiciona espaçamento extra entre subárvores
+        // de irmãos para que os barramentos não se sobreponham horizontalmente.
         if (nextFamily._multiParent && shift >= 0 && shift < 2 * SIZE) shift = 2 * SIZE;
         correctUnitsShift(nextFamily.children.slice(nextIdx), shift);
       }
     }
 
+    // Desloca famílias root subsequentes para a direita quando uma subárvore cresce.
     function arrangeMiddleFamilies(rootFams, fid, startFrom) {
       var startIdx = -1;
       for (var i = 0; i < rootFams.length; i++) {
@@ -478,6 +569,8 @@
       }
     }
 
+    // Propaga ajustes de posição de uma família filha até a raiz.
+    // A cada nível, reposiciona os pais e empurra famílias vizinhas.
     function arrangeFamilies(family) {
       var right = 0;
       while (family.pid) {
@@ -497,51 +590,69 @@
       }
     }
 
+    // Retorna as unidades filhas que têm filhos próprios (precisam expandir).
     function getUnitsWithChildren(family) {
       return family.children.filter(hasChildrenFn).reverse();
     }
 
+    function unitHasRoot(unit) {
+      return unit.nodes.some(withId(store.root.id));
+    }
+
     store.familiesArray.filter(withFamilyType(FAMILY_TYPE_ROOT)).forEach(function (rootFamily) {
-      var stack = getUnitsWithChildren(rootFamily);
+      var stack = getUnitsWithChildren(rootFamily).map(function (unit) {
+        return { unit: unit, recursive: unitHasRoot(unit) };
+      });
       while (stack.length) {
-        var parentUnit = stack.pop();
+        var entry = stack.pop();
+        var parentUnit = entry.unit;
         var family = createFamily(nodeIds(parentUnit), FAMILY_TYPE_CHILD);
         updateFamily(family, parentUnit);
         arrangeFamilies(family);
         store.families[family.id] = family;
-        stack = stack.concat(getUnitsWithChildren(family));
+        if (entry.recursive) {
+          stack = stack.concat(getUnitsWithChildren(family).map(function (unit) {
+            return { unit: unit, recursive: true };
+          }));
+        }
       }
     });
 
-    // Expand children of ancestor siblings placed in PARENT families
+    // Expande filhos dos tios/tias posicionados em famílias PARENT.
+    // Como a direção ancestral só inclui irmãos no primeiro nível acima do
+    // root, isso mostra primos de primeiro grau sem trazer tios-avós.
     store.familiesArray.filter(withFamilyType(FAMILY_TYPE_PARENT)).forEach(function (parentFamily) {
       var siblingUnits = parentFamily.children.filter(function (unit) {
         return !unit._isAncestorLink && hasChildrenFn(unit);
       }).reverse();
 
-      var stack = siblingUnits;
-      while (stack.length) {
-        var parentUnit = stack.pop();
+      siblingUnits.forEach(function (parentUnit) {
         var family = createFamily(nodeIds(parentUnit), FAMILY_TYPE_CHILD);
         updateFamily(family, parentUnit);
         arrangeFamilies(family);
         store.families[family.id] = family;
-        stack = stack.concat(getUnitsWithChildren(family));
-      }
+      });
     });
 
     return store;
   }
 
   // =========================================================================
-  // PARENTS DIRECTION
+  // DIREÇÃO ANCESTRAL (Parents Direction)
+  // Expande a árvore para cima: para cada unidade de pais que tem avós,
+  // cria uma família PARENT com os avós + seus filhos (tios do root).
+  // Trata famílias multi-parent (2 avós paternos + 2 maternos).
   // =========================================================================
   function inParentDirection(store) {
-    function createParentFamily(childIDs) {
+    // Cria uma família de ancestrais para os IDs de filhos fornecidos.
+    // Quando includeCollateralSiblings=true, inclui também os irmãos desses
+    // filhos. Isso é usado só no primeiro nível acima do root, para mostrar
+    // tios sem trazer tios-avós/tios-bisavós.
+    function createParentFamily(childIDs, includeCollateralSiblings) {
       var createChildUnits = createChildUnitsFunc(store);
       var family = newFamily(store.getNextId(), FAMILY_TYPE_PARENT);
 
-      // Get parent units for each ancestor in childIDs
+      // Obtém unidades de pais para cada ancestral em childIDs
       var childNodes = store.getNodes(childIDs);
       var parentUnits = [];
       childNodes.forEach(function (child) {
@@ -550,17 +661,21 @@
       });
       family.parents = parentUnits;
 
-      // Collect ALL children of ALL parent units (ancestors + their siblings)
-      var allChildIdSet = {};
-      parentUnits.forEach(function (pUnit) {
-        pUnit.nodes.forEach(function (parentNode) {
-          parentNode.children.forEach(function (rel) {
-            allChildIdSet[rel.id] = true;
+      var siblingIds = [];
+      if (includeCollateralSiblings) {
+        // Coleta TODOS os filhos de TODAS as unidades de pais (ancestrais + seus irmãos)
+        var allChildIdSet = {};
+        parentUnits.forEach(function (pUnit) {
+          pUnit.nodes.forEach(function (parentNode) {
+            parentNode.children.forEach(function (rel) {
+              allChildIdSet[rel.id] = true;
+            });
           });
         });
-      });
+        siblingIds = Object.keys(allChildIdSet);
+      }
 
-      // Create child units: ancestors first (keeps children[0] as link unit)
+      // Cria unidades filhas: ancestrais primeiro (mantém children[0] como link)
       var placedIds = {};
       var childUnitsResult = [];
 
@@ -576,8 +691,8 @@
         });
       });
 
-      // Then place siblings of ancestors sorted by birth year
-      var siblingIds = Object.keys(allChildIdSet).filter(function (id) {
+      // Depois posiciona irmãos dos ancestrais ordenados por ano de nascimento
+      siblingIds = siblingIds.filter(function (id) {
         return !placedIds[id];
       });
       siblingIds.sort(function (a, b) {
@@ -598,22 +713,23 @@
       });
 
       // ---------------------------------------------------------------
-      // For multi-parent families: position siblings so that each
-      // grandparent couple's bus stays on its own side (no crossing).
+      // Para famílias multi-parent: posiciona irmãos de modo que o
+      // barramento de cada casal de avós fique do seu próprio lado
+      // (sem cruzamentos).
       //
-      // Rule: the ancestor link (Olomir+Cintia) is on the MAIN branch.
-      //   • Paternal ancestor (left of couple / parentUnits[0]):
-      //       their siblings go to the LEFT of the ancestor link.
-      //   • Maternal ancestor (right of couple / parentUnits[1]):
-      //       their siblings go to the RIGHT of the ancestor link.
+      // Regra: o link ancestral fica no ramo PRINCIPAL.
+      //   • Ancestral paterno (esquerda / parentUnits[0]):
+      //       seus irmãos vão para a ESQUERDA do link ancestral.
+      //   • Ancestral materno (direita / parentUnits[1]):
+      //       seus irmãos vão para a DIREITA do link ancestral.
       //
-      // Layout: [paternal siblings] [ancestor link] [maternal siblings]
-      // Then each parent unit is centred above its children group.
+      // Layout: [irmãos paternos] [link ancestral] [irmãos maternos]
+      // Cada unidade de pais é centralizada acima do seu grupo de filhos.
       // ---------------------------------------------------------------
       family.children = childUnitsResult;
 
       if (parentUnits.length > 1) {
-        // Build lookup: childId → owning parent unit index
+        // Constrói lookup: childId → índice da unidade de pais dona
         var childOwner = {};
         parentUnits.forEach(function (pUnit, pIdx) {
           pUnit.nodes.forEach(function (pn) {
@@ -621,8 +737,8 @@
           });
         });
 
-        // Separate siblings into paternal (unit 0) and maternal (unit 1+)
-        var ancestorUnit = family.children[0]; // always the ancestor link
+        // Separa irmãos em paternos (unit 0) e maternos (unit 1+)
+        var ancestorUnit = family.children[0]; // sempre o link ancestral
         var paternalSiblings = [];
         var maternalSiblings = [];
 
@@ -639,13 +755,13 @@
           else maternalSiblings.push(cUnit);
         }
 
-        // Position children: [paternal siblings] [ancestor link] [maternal siblings]
+        // Posiciona filhos: [irmãos paternos] [link ancestral] [irmãos maternos]
         var pos = 0;
         paternalSiblings.forEach(function (u) { u.pos = pos; pos += nodeCount(u) * SIZE; });
         ancestorUnit.pos = pos; pos += nodeCount(ancestorUnit) * SIZE;
         maternalSiblings.forEach(function (u) { u.pos = pos; pos += nodeCount(u) * SIZE; });
 
-        // Position each parent unit centred above its own children
+        // Posiciona cada unidade de pais centralizada acima dos seus filhos
         parentUnits.forEach(function (pUnit) {
           var pChildIds = {};
           pUnit.nodes.forEach(function (pn) {
@@ -667,7 +783,7 @@
           }
         });
 
-        // Ensure parent units don't overlap
+        // Garante que unidades de pais não se sobreponham
         family.parents.sort(function (a, b) { return a.pos - b.pos; });
         for (var pi = 1; pi < family.parents.length; pi++) {
           var minPos = family.parents[pi - 1].pos + nodeCount(family.parents[pi - 1]) * SIZE;
@@ -676,7 +792,7 @@
           }
         }
 
-        // Normalize: no negative positions
+        // Normaliza: sem posições negativas
         var allUnits = family.parents.concat(family.children);
         var minStart = arrMin(allUnits.map(prop("pos")));
         if (minStart !== 0) {
@@ -684,8 +800,8 @@
           correctUnitsShift(family.children, -minStart);
         }
 
-        // Reorder children array to match spatial order (by pos).
-        // This ensures arrangeNextFamily's slice(nextIdx) targets correct side.
+        // Reordena o array de filhos para corresponder à ordem espacial (por pos).
+        // Isso garante que arrangeNextFamily's slice(nextIdx) acerte o lado correto.
         family.children = paternalSiblings.concat([ancestorUnit]).concat(maternalSiblings);
         family._multiParent = true;
       } else {
@@ -695,6 +811,7 @@
       return family;
     }
 
+    // Atualiza a posição da família ancestral: Y fica uma linha acima da família filha.
     function updateFamily(family, childUnit) {
       var childFamily = store.getFamily(childUnit.fid);
       family.cid = childFamily.id;
@@ -702,6 +819,7 @@
       family.X = getUnitX(childFamily, childUnit);
     }
 
+    // Ajusta a posição da família ancestral dentro da família filha (propagação para baixo).
     function arrangeNextFamily(family, nextFamily, right) {
       var unit = family.children[0];
       var index = -1;
@@ -729,7 +847,7 @@
         right = Math.max(right, rightOf(family));
         var nextFamily = store.getFamily(family.cid);
 
-        // Find the ancestor link unit (may not be at index 0 in multi-parent families)
+        // Encontra o link ancestral (pode não estar no índice 0 em famílias multi-parent)
         var unit = null;
         var unitIdx = 0;
         for (var k = 0; k < family.children.length; k++) {
@@ -740,7 +858,7 @@
         var oldPos = unit.pos;
 
         if (!nextFamily.cid) {
-          // Is root family - center child unit under parents
+          // É família raiz - centraliza a unidade filha sob os pais
           unit.pos = (widthOf(family) - nodeCount(unit) * SIZE) / 2;
         } else {
           if (family.parents.length === 2 && unitNodesCount(family.parents) > 2) {
@@ -749,7 +867,7 @@
           arrangeNextFamily(family, nextFamily, right);
         }
 
-        // Keep sibling units aligned when ancestor link unit shifts
+        // Mantém unidades de irmãos alinhadas quando o link ancestral se move
         var delta = unit.pos - oldPos;
         if (delta !== 0 && family.children.length > 1) {
           for (var ci = 0; ci < family.children.length; ci++) {
@@ -761,6 +879,7 @@
       }
     }
 
+    // Retorna as unidades de pais que ainda têm avós (para continuar subindo).
     function getParentUnitsWithParents(family) {
       return family.parents.filter(function (unit) {
         return unit.nodes.some(function (node) { return node.parents.length > 0; });
@@ -773,7 +892,8 @@
     var stack = getParentUnitsWithParents(rootFamily);
     while (stack.length) {
       var childUnit = stack.pop();
-      var family = createParentFamily(nodeIds(childUnit));
+      var includeCollateralSiblings = childUnit.fid === rootFamily.id;
+      var family = createParentFamily(nodeIds(childUnit), includeCollateralSiblings);
       updateFamily(family, childUnit);
       arrangeFamilies(family);
       store.families[family.id] = family;
@@ -784,20 +904,23 @@
   }
 
   // =========================================================================
-  // CORRECT POSITIONS (normalize to 0,0)
+  // CORREÇÃO DE POSIÇÕES
+  // Normaliza todas as coordenadas para que a árvore comece em (0,0).
+  // Alinha gerações entre famílias pai e root para que as linhas de
+  // conexão fiquem corretas.
   // =========================================================================
   function correctPositions(store) {
     var families = store.familiesArray;
     var rootFamily = store.rootFamily;
 
-    // Align generations: shift child/root families so that parent row aligns
+    // Alinha gerações: desloca famílias child/root para que a linha de pais se alinhe
     if (rootFamily) {
       var parentFam = null;
       for (var i = 0; i < families.length; i++) {
         if (families[i].cid === rootFamily.id) { parentFam = families[i]; break; }
       }
       if (parentFam && parentFam.children[0] && rootFamily.parents[0]) {
-        // Find the ancestor link unit (connects parent family to root family)
+        // Encontra o link ancestral (conecta família pai à família raiz)
         var anchorUnit = null;
         for (var ai = 0; ai < parentFam.children.length; ai++) {
           if (parentFam.children[ai]._isAncestorLink) { anchorUnit = parentFam.children[ai]; break; }
@@ -810,11 +933,11 @@
       }
     }
 
-    // Normalize X
+    // Normaliza X
     var minX = arrMin(families.map(prop("X")));
     if (minX !== 0) families.forEach(function (f) { f.X += -minX; });
 
-    // Normalize Y
+    // Normaliza Y
     var minY = arrMin(families.map(prop("Y")));
     if (minY !== 0) families.forEach(function (f) { f.Y += -minY; });
 
@@ -822,12 +945,15 @@
   }
 
   // =========================================================================
-  // GET EXTENDED NODES (extract positions for each person)
+  // EXTRAÇÃO DE NÓS POSICIONADOS
+  // Percorre todas as famílias e extrai a posição (top, left) em unidades
+  // de grid para cada pessoa. Um nó pode aparecer em múltiplas famílias
+  // (será deduplicado depois).
   // =========================================================================
   function getExtendedNodes(families) {
     var result = [];
     families.forEach(function (family) {
-      // Parent nodes (only for root and parent families)
+      // Nós pais (apenas para famílias root e parent)
       if (family.type === FAMILY_TYPE_ROOT || family.type === FAMILY_TYPE_PARENT) {
         family.parents.forEach(function (unit) {
           unit.nodes.forEach(function (node, idx) {
@@ -839,8 +965,8 @@
           });
         });
       }
-      // Child nodes (for root, child, AND parent families — parent families
-      // now include siblings of ancestors alongside the direct ancestor link)
+      // Nós filhos (para famílias root, child E parent — famílias parent
+      // agora incluem irmãos dos ancestrais junto com o link ancestral direto)
       if (family.type === FAMILY_TYPE_ROOT || family.type === FAMILY_TYPE_CHILD || family.type === FAMILY_TYPE_PARENT) {
         family.children.forEach(function (unit) {
           var topOffset = unit.child && family.parents.length > 0 ? SIZE : 0;
@@ -858,12 +984,15 @@
   }
 
   // =========================================================================
-  // CONNECTORS
+  // CONECTORES
+  // Calcula as linhas de conexão entre nós no grid abstrato.
+  // Tipos: conexões entre cônjuges, de pais para filhos, e barras horizontais
+  // que ligam irmãos. Retorna arrays [x1, y1, x2, y2].
   // =========================================================================
   function calcConnectors(families) {
     var connectors = [];
 
-    // Middle connectors (between spouses in root families)
+    // Conectores do meio (entre cônjuges nas famílias root)
     var rootFamilies = families.filter(withFamilyType(FAMILY_TYPE_ROOT));
     rootFamilies.forEach(function (family) {
       family.parents.forEach(function (unit) {
@@ -885,7 +1014,7 @@
       });
     });
 
-    // Parent connectors
+    // Conectores de pais (famílias PARENT)
     families.filter(withFamilyType(FAMILY_TYPE_PARENT)).forEach(function (family) {
       family.parents.forEach(function (unit) {
         var pX = getParentsX(family, unit);
@@ -914,7 +1043,7 @@
       });
     });
 
-    // Children connectors
+    // Conectores dos filhos
     families.filter(withFamilyType(FAMILY_TYPE_ROOT, FAMILY_TYPE_CHILD)).forEach(function (family) {
       var parent = family.parents[0];
       var pX = getParentsX(family, parent);
@@ -964,7 +1093,8 @@
   }
 
   // =========================================================================
-  // CANVAS SIZE
+  // TAMANHO DO CANVAS
+  // Calcula a largura e altura total necessária para conter todas as famílias.
   // =========================================================================
   function getCanvasSize(families) {
     return {
@@ -974,10 +1104,13 @@
   }
 
   // =========================================================================
-  // MAIN: calcTree (the full pipeline)
+  // PIPELINE PRINCIPAL: calcTree
+  // Executa o pipeline completo: direção central → ancestral → descendente
+  // → correção de posições. Retorna famílias, canvas, nós e conectores.
   // =========================================================================
   var calcFamilies = pipe(inMiddleDirection, inParentDirection, inChildDirection, correctPositions);
 
+  // Executa o cálculo completo da árvore a partir dos nós e do rootId.
   function calcTree(nodes, rootId) {
     var store = new Store(nodes, rootId);
     var families = calcFamilies(store).familiesArray;
@@ -990,12 +1123,14 @@
   }
 
   // =========================================================================
-  // DATA CONVERSION: Stirps API format → relatives-tree Node format
+  // CONVERSÃO DE DADOS: formato da API Stirps → formato relatives-tree
+  // Transforma people[], unions[] e relationsByChild{} em um array de nós
+  // com relações parents, children, siblings e spouses.
   // =========================================================================
   function convertToRelativesTreeNodes(people, unions, relationsByChild) {
     var nodesById = {};
 
-    // Initialize nodes
+    // Inicializa nós
     (people || []).forEach(function (person) {
       if (!person || !person.id) return;
       nodesById[person.id] = {
@@ -1009,7 +1144,7 @@
       };
     });
 
-    // Fill parents relation
+    // Preenche relação de pais
     Object.keys(relationsByChild || {}).forEach(function (childId) {
       if (!nodesById[childId]) return;
       var parentIds = (relationsByChild[childId] || []).filter(function (id) {
@@ -1020,7 +1155,7 @@
       });
     });
 
-    // Fill children relation (derived from parents)
+    // Preenche relação de filhos (derivada dos pais)
     Object.keys(relationsByChild || {}).forEach(function (childId) {
       if (!nodesById[childId]) return;
       var parentIds = (relationsByChild[childId] || []).filter(function (id) {
@@ -1035,7 +1170,7 @@
       });
     });
 
-    // Fill spouses from unions
+    // Preenche cônjuges a partir das uniões
     (unions || []).forEach(function (union) {
       var aId = union.partner_a_id || union.partnerAId || union.partner_a || union.partnerA;
       var bId = union.partner_b_id || union.partnerBId || union.partner_b || union.partnerB;
@@ -1049,7 +1184,7 @@
       }
     });
 
-    // Fill siblings (persons sharing at least one parent)
+    // Preenche irmãos (pessoas que compartilham pelo menos um pai)
     var childrenByParent = {};
     Object.keys(relationsByChild || {}).forEach(function (childId) {
       (relationsByChild[childId] || []).forEach(function (parentId) {
@@ -1080,8 +1215,10 @@
   }
 
   // =========================================================================
-  // Choose root: pick the person closest to the center of the graph
-  // Heuristic: prefer person with both parents and children, else most connections
+  // ESCOLHA DO ROOT
+  // Heurística para escolher a pessoa central da árvore quando nenhum rootId
+  // é fornecido. Prefere pessoas com pais E filhos (geração do meio),
+  // depois cônjuges, depois maior número de conexões.
   // =========================================================================
   function chooseRootId(nodes) {
     if (!nodes || nodes.length === 0) return null;
@@ -1091,11 +1228,11 @@
 
     nodes.forEach(function (node) {
       var score = 0;
-      // Prefer nodes with parents AND children (middle generation)
+      // Prefere nós com pais E filhos (geração do meio)
       if (node.parents.length > 0 && node.children.length > 0) score += 100;
-      // Prefer nodes with spouses
+      // Prefere nós com cônjuges
       if (node.spouses.length > 0) score += 50;
-      // More connections = better center
+      // Mais conexões = melhor centro
       score += node.parents.length + node.children.length + node.spouses.length + node.siblings.length;
 
       if (score > bestScore) {
@@ -1108,20 +1245,29 @@
   }
 
   // =========================================================================
-  // PUBLIC API: computeApiTreeLayout
-  // Maintains the same interface expected by tree.jsx:
-  //   { nodes: { [id]: { id, x, y } }, links: [...], groups: [] }
+  // API PÚBLICA: computeApiTreeLayout
+  // Função principal chamada pelo tree.jsx. Recebe os dados da API e retorna
+  // o layout completo: { nodes: { [id]: {x,y} }, links: [...], groups: [] }
+  //
+  // Fluxo:
+  // 1. Converte dados da API para formato interno
+  // 2. Escolhe o root (fornecido ou por heurística)
+  // 3. Executa o algoritmo principal (calcTree)
+  // 4. Converte posições de grid para pixels
+  // 5. Trata componentes desconectados
+  // 6. Resolve sobreposições
+  // 7. Gera links/conectores
   // =========================================================================
   function computeApiTreeLayout(people, unions, relationsByChild, optRootId) {
     var layout = { nodes: {}, links: [], groups: [] };
 
     if (!people || people.length === 0) return layout;
 
-    // Convert to relatives-tree format
+    // Converte para formato relatives-tree
     var rtNodes = convertToRelativesTreeNodes(people, unions, relationsByChild);
     if (rtNodes.length === 0) return layout;
 
-    // Choose root: use provided rootId if valid, otherwise heuristic
+    // Escolhe root: usa rootId fornecido se válido, senão heurística
     var rootId;
     if (optRootId && rtNodes.some(function (n) { return n.id === optRootId; })) {
       rootId = optRootId;
@@ -1130,25 +1276,25 @@
     }
     if (!rootId) return layout;
 
-    // Run the algorithm
+    // Executa o algoritmo
     var result;
     try {
       result = calcTree(rtNodes, rootId);
     } catch (e) {
-      // Fallback: if the algorithm fails, use simple grid layout
+      // Fallback: se o algoritmo falhar, usa layout de grade simples
       console.warn("[tree-layout] relatives-tree algorithm failed, using fallback:", e);
       return computeFallbackLayout(people, unions, relationsByChild);
     }
 
-    // Convert abstract grid positions to pixel positions
-    // Each unit in the grid corresponds to half a node dimension
-    // Add gaps between nodes for connector space
+    // Converte posições do grid abstrato para pixels
+    // Cada unidade do grid corresponde a metade de uma dimensão do nó
+    // Adiciona espaços entre nós para conectores
     var COL_GAP = 60;
     var ROW_GAP = 70;
     var UNIT_X = (NODE_W + COL_GAP) / 2;
     var UNIT_Y = (NODE_H + ROW_GAP) / 2;
 
-    // De-duplicate nodes (a node may appear in multiple families)
+    // Deduplica nós (um nó pode aparecer em múltiplas famílias)
     var seenNodes = {};
     result.nodes.forEach(function (extNode) {
       if (seenNodes[extNode.id]) return;
@@ -1160,15 +1306,15 @@
       };
     });
 
-    // Collect ALL families from main tree and disconnected components
+    // Coleta TODAS as famílias da árvore principal e componentes desconectados
     var allFamilies = result.families.slice();
 
-    // Handle disconnected components: nodes not reached from root
-    // When a specific root is pinned, skip disconnected components
-    // (e.g. in-law parents should not appear when viewing from the other side)
+    // Trata componentes desconectados: nós não alcançados a partir do root
+    // Quando um root específico é fixado, ignora componentes desconectados
+    // (ex: pais de sogros não devem aparecer quando visto do outro lado)
     var unplacedNodes = rtNodes.filter(function (n) { return !layout.nodes[n.id]; });
     if (unplacedNodes.length > 0 && !optRootId) {
-      // Find max X of already placed nodes for offset
+      // Encontra o X máximo dos nós já posicionados para offset
       var maxPlacedX = 0;
       Object.keys(layout.nodes).forEach(function (id) {
         var nx = layout.nodes[id].x + NODE_W;
@@ -1176,14 +1322,14 @@
       });
       var componentOffset = maxPlacedX + COL_GAP;
 
-      // Process each disconnected component
+      // Processa cada componente desconectado
       while (unplacedNodes.length > 0) {
         var componentRoot = chooseRootId(unplacedNodes);
         var componentResult;
         try {
           componentResult = calcTree(unplacedNodes, componentRoot);
         } catch (e) {
-          // If it fails, just place linearly
+          // Se falhar, posiciona linearmente
           unplacedNodes.forEach(function (n, idx) {
             layout.nodes[n.id] = {
               id: n.id,
@@ -1205,10 +1351,10 @@
           };
         });
 
-        // Collect component families (will generate links once at the end)
+        // Coleta famílias do componente (gerará links de uma vez no final)
         allFamilies = allFamilies.concat(componentResult.families);
 
-        // Update offset for next component
+        // Atualiza offset para o próximo componente
         var compMaxX = 0;
         Object.keys(componentPlaced).forEach(function (id) {
           var nx = layout.nodes[id].x + NODE_W;
@@ -1216,32 +1362,32 @@
         });
         componentOffset = compMaxX + COL_GAP;
 
-        // Remove placed nodes
+        // Remove nós já posicionados
         unplacedNodes = unplacedNodes.filter(function (n) { return !componentPlaced[n.id]; });
       }
     }
 
-    // Resolve any node overlaps by pushing right
+    // Resolve sobreposições de nós empurrando para a direita
     resolveNodeOverlaps(layout.nodes, NODE_W, COL_GAP);
 
-    // Generate links from ALL families at once (single drawnUnions map prevents duplicates)
+    // Gera links de TODAS as famílias de uma vez (mapa drawnUnions previne duplicatas)
     generateLinksFromFamilies(allFamilies, layout.nodes, unions, UNIT_X, UNIT_Y, layout.links);
 
     return layout;
   }
 
   // =========================================================================
-  // RESOLVE NODE OVERLAPS
-  // Post-processing step: detects nodes that overlap within the same
-  // generation row and pushes everything to the right of the overlap point
-  // further right.  This guarantees a minimum gap of COL_GAP between every
-  // pair of adjacent nodes on the same row.
+  // RESOLUÇÃO DE SOBREPOSIÇÕES
+  // Pós-processamento: detecta nós sobrepostos na mesma geração (mesma
+  // linha Y) e empurra tudo à direita do ponto de sobreposição.
+  // Garante um espaçamento mínimo de minGap entre nós adjacentes.
+  // Máximo de 20 iterações como rede de segurança.
   // =========================================================================
   function resolveNodeOverlaps(nodes, nodeW, minGap) {
     var nodeArr = Object.values(nodes);
     if (nodeArr.length < 2) return;
 
-    // Group by Y (generation row)
+    // Agrupa por Y (linha de geração)
     var rowMap = {};
     nodeArr.forEach(function (n) {
       var key = Math.round(n.y);
@@ -1251,7 +1397,7 @@
 
     var rowYs = Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; });
 
-    // Iterate until no overlaps remain (max 20 passes as safety net)
+    // Itera até que não haja mais sobreposições (máximo 20 passes como segurança)
     for (var pass = 0; pass < 20; pass++) {
       var foundOverlap = false;
 
@@ -1264,11 +1410,11 @@
             var shift = requiredX - row[i].x;
             var cutoff = row[i].x;
 
-            // Protect nodes to the left of the overlap in this row
+            // Protege nós à esquerda da sobreposição nesta linha
             var leftInRow = {};
             for (var j = 0; j < i; j++) leftInRow[row[j].id] = true;
 
-            // Shift the right group: everything at x >= cutoff except the left group
+            // Desloca o grupo direito: tudo em x >= cutoff exceto o grupo esquerdo
             nodeArr.forEach(function (n) {
               if (leftInRow[n.id]) return;
               if (n.x >= cutoff) n.x += shift;
@@ -1285,11 +1431,15 @@
   }
 
   // =========================================================================
-  // LINK GENERATION from family structure
-  // Produces links with proper semantic properties for tree.jsx rendering
+  // GERAÇÃO DE LINKS a partir da estrutura de famílias
+  // Percorre todas as famílias e gera 3 tipos de links para renderização:
+  //   - "union": linha horizontal entre cônjuges
+  //   - "drop": linha vertical (de pais para barramento, ou barramento para filhos)
+  //   - "bus": linha horizontal que conecta irmãos
+  // Usa drawnUnions para evitar links duplicados.
   // =========================================================================
   function generateLinksFromFamilies(families, layoutNodes, unions, UNIT_X, UNIT_Y, links) {
-    // Build union lookup
+    // Constrói lookup de uniões
     var unionPairs = {};
     (unions || []).forEach(function (union) {
       var aId = union.partner_a_id || union.partnerAId || union.partner_a || union.partnerA;
@@ -1300,11 +1450,11 @@
       }
     });
 
-    // Track which union pairs we've already drawn
+    // Rastreia quais pares de união já foram desenhados
     var drawnUnions = {};
 
     families.forEach(function (family) {
-      // Draw union/spouse links from parent units
+      // Desenha links de união/cônjuge das unidades de pais
       family.parents.forEach(function (unit) {
         if (nodeCount(unit) === NODES_IN_COUPLE) {
           var n1 = unit.nodes[0], n2 = unit.nodes[1];
@@ -1325,7 +1475,7 @@
         }
       });
 
-      // Draw child units spouse links
+      // Desenha links de cônjuge das unidades filhas
       family.children.forEach(function (unit) {
         if (nodeCount(unit) === NODES_IN_COUPLE) {
           var n1 = unit.nodes[0], n2 = unit.nodes[1];
@@ -1346,13 +1496,13 @@
         }
       });
 
-      // Draw parent-to-children connections for ALL family types
+      // Desenha conexões pai-filhos para TODOS os tipos de família
       if (family.parents.length > 0 && family.children.length > 0) {
-        // Iterate over each parent unit (PARENT families can have multiple)
+        // Itera sobre cada unidade de pais (famílias PARENT podem ter múltiplas)
         family.parents.forEach(function (parentUnit) {
           if (!parentUnit || !parentUnit.nodes.length) return;
 
-          // Find parent nodes positions
+          // Encontra posições dos nós pais
           var parentPositions = parentUnit.nodes.map(function (n) { return layoutNodes[n.id]; }).filter(Boolean);
           if (parentPositions.length === 0) return;
 
@@ -1361,7 +1511,7 @@
           var parentBottomY = parentPositions[0].y + NODE_H;
           var isCouple = parentPositions.length === 2;
 
-          // Find child node positions (only those whose parents match)
+          // Encontra posições dos nós filhos (apenas os que têm esses pais)
           var parentIds = parentUnit.nodes.map(prop("id"));
           var childPositions = [];
         family.children.forEach(function (cUnit) {
@@ -1382,7 +1532,7 @@
           ? parentBottomY + (NODE_H * 0.3)
           : parentBottomY + (childTopY - parentBottomY) / 2;
 
-        // Drop from parent/union to bus
+        // Linha vertical do pai/união até o barramento
         links.push({
           type: "drop",
           x: parentMidX,
@@ -1391,7 +1541,7 @@
           fromUnion: isCouple,
         });
 
-        // Horizontal bus
+        // Barramento horizontal
         var childXs = childPositions.map(function (p) { return p.x + NODE_W / 2; });
         var allXs = [parentMidX].concat(childXs);
         var busMinX = Math.min.apply(null, allXs);
@@ -1400,7 +1550,7 @@
           links.push({ type: "bus", x1: busMinX, x2: busMaxX, y: busY });
         }
 
-        // Drops from bus to each child
+        // Linhas verticais do barramento até cada filho
         childPositions.forEach(function (cp) {
           links.push({
             type: "drop",
@@ -1414,8 +1564,8 @@
       }
     });
 
-    // Catch-all: draw any union links not yet drawn
-    // (handles spouses placed in separate family units, e.g. multiple marriages)
+    // Captura geral: desenha links de união ainda não desenhados
+    // (trata cônjuges em unidades de família separadas, ex: casamentos múltiplos)
     (unions || []).forEach(function (union) {
       var aId = union.partner_a_id || union.partnerAId || union.partner_a || union.partnerA;
       var bId = union.partner_b_id || union.partnerBId || union.partner_b || union.partnerB;
@@ -1436,8 +1586,10 @@
   }
 
   // =========================================================================
-  // FALLBACK: simple generation-based layout (previous algorithm)
-  // Used if the main algorithm throws an error (e.g. cyclic data)
+  // LAYOUT FALLBACK (algoritmo simplificado)
+  // Usado quando o algoritmo principal falha (ex: dados cíclicos).
+  // Posiciona as pessoas em uma grade simples baseada em gerações (BFS).
+  // Cada geração é uma linha horizontal, centralizada.
   // =========================================================================
   function computeFallbackLayout(people, unions, relationsByChild) {
     var layout = { nodes: {}, links: [], groups: [] };
@@ -1466,7 +1618,7 @@
       });
     });
 
-    // BFS from roots
+    // BFS a partir das raízes
     var generationById = {};
     var roots = Object.keys(peopleById).filter(function (id) {
       return (parentsByChild[id] || []).length === 0;
@@ -1487,7 +1639,7 @@
       });
     }
 
-    // Group by generation
+    // Agrupa por geração
     var groups = {};
     Object.keys(peopleById).forEach(function (id) {
       var g = generationById[id] || 0;
@@ -1512,7 +1664,7 @@
       });
     });
 
-    // Union links
+    // Links de união
     (unions || []).forEach(function (union) {
       var aId = union.partner_a_id || union.partnerAId || union.partner_a || union.partnerA;
       var bId = union.partner_b_id || union.partnerBId || union.partner_b || union.partnerB;
@@ -1528,7 +1680,7 @@
       });
     });
 
-    // Parent-child links
+    // Links pai-filho
     var byParents = {};
     Object.keys(relationsByChild || {}).forEach(function (childId) {
       var child = layout.nodes[childId];
@@ -1560,7 +1712,8 @@
   }
 
   // =========================================================================
-  // EXPORT
+  // EXPORTAÇÃO
+  // Expõe a API pública no objeto global window.treeLayout.
   // =========================================================================
   window.treeLayout = {
     NODE_W: NODE_W,

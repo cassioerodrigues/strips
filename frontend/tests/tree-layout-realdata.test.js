@@ -135,6 +135,21 @@ assert.ok(layout.nodes[MATHEUS],  "Matheus (nephew) must be present");
 assert.ok(layout.nodes[JULIA],    "Julia (niece) must be present");
 console.log("✓ PASS: Siblings and their families are present");
 
+// --- Birth year ordering: siblings should be left-to-right by birth ---
+// Cassio (1988) should be LEFT of André (1993)
+assert.ok(
+  layout.nodes[CASSIO].x < layout.nodes[ANDRE].x,
+  "Cassio (1988) should be to the left of André (1993) — birth year ordering"
+);
+console.log("✓ PASS: Cassio is left of André (birth year order)");
+
+// Cintia (1971) should be LEFT of Karine (1983) — siblings of same parents
+assert.ok(
+  layout.nodes[CINTIA].x < layout.nodes[KARINE].x,
+  "Cintia (1971) should be to the left of Karine (1983) — birth year ordering"
+);
+console.log("✓ PASS: Cintia is left of Karine (birth year order)");
+
 // --- Spouse and children ---
 assert.ok(layout.nodes[EVELINE],  "Eveline (wife) must be present");
 assert.ok(layout.nodes[ZOE],      "Zoe (daughter) must be present");

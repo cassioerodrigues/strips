@@ -327,6 +327,13 @@
       var rels = first.children.filter(function (rel) {
         return !second || second.children.some(withId(rel.id));
       });
+      // Sort siblings by birth year (eldest left, youngest right)
+      rels.sort(function (a, b) {
+        var na = store.getNode(a.id), nb = store.getNode(b.id);
+        var ya = (na && na.birthYear) || 9999;
+        var yb = (nb && nb.birthYear) || 9999;
+        return ya - yb;
+      });
       var result = [];
       rels.forEach(function (rel) {
         var node = store.getNode(rel.id);
@@ -564,8 +571,17 @@
         });
       });
 
-      // Then place siblings of ancestors with their spouses
-      Object.keys(allChildIdSet).forEach(function (childId) {
+      // Then place siblings of ancestors sorted by birth year
+      var siblingIds = Object.keys(allChildIdSet).filter(function (id) {
+        return !placedIds[id];
+      });
+      siblingIds.sort(function (a, b) {
+        var na = store.getNode(a), nb = store.getNode(b);
+        var ya = (na && na.birthYear) || 9999;
+        var yb = (nb && nb.birthYear) || 9999;
+        return ya - yb;
+      });
+      siblingIds.forEach(function (childId) {
         if (placedIds[childId]) return;
         var node = store.getNode(childId);
         if (!node) return;
@@ -873,6 +889,7 @@
       nodesById[person.id] = {
         id: person.id,
         gender: person.sex === "F" ? "female" : "male",
+        birthYear: person.birth_year || person.birthYear || (person.birth && person.birth.year) || null,
         parents: [],
         children: [],
         siblings: [],

@@ -163,5 +163,22 @@ console.log("✓ PASS: Spouse and children are present");
 const inlawsPlaced = [ADIR, ALZIRA, CARLOS].filter((id) => layout.nodes[id]);
 console.log(`\nNote: ${inlawsPlaced.length}/3 in-laws placed (Eveline's family — not in Cassio's ancestor line)`);
 
+// --- No node overlaps ---
+const NODE_W = 220;
+const NODE_H = 86;
+const nodeEntries = Object.values(layout.nodes);
+const overlaps = [];
+for (let i = 0; i < nodeEntries.length; i++) {
+  for (let j = i + 1; j < nodeEntries.length; j++) {
+    const a = nodeEntries[i], b = nodeEntries[j];
+    if (a.x < b.x + NODE_W && b.x < a.x + NODE_W &&
+        a.y < b.y + NODE_H && b.y < a.y + NODE_H) {
+      overlaps.push(`${getName(a.id)} (${a.x},${a.y}) <-> ${getName(b.id)} (${b.x},${b.y})`);
+    }
+  }
+}
+assert.equal(overlaps.length, 0, "No nodes should overlap. Found: " + overlaps.join("; "));
+console.log("✓ PASS: No node overlaps detected");
+
 console.log(`\n=== ALL CRITICAL TESTS PASSED — ${allNodeIds.length}/${people.length} people rendered ===`);
 console.log("Missing (expected): Eveline's parents (Adir, Alzira) and brother (Carlos) — not Cassio's ancestors");

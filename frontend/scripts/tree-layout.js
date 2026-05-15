@@ -1109,10 +1109,67 @@
       }
     }
 
+    // Resolve any node overlaps by pushing right
+    resolveNodeOverlaps(layout.nodes, NODE_W, COL_GAP);
+
     // Generate links from ALL families at once (single drawnUnions map prevents duplicates)
     generateLinksFromFamilies(allFamilies, layout.nodes, unions, UNIT_X, UNIT_Y, layout.links);
 
     return layout;
+  }
+
+  // =========================================================================
+  // RESOLVE NODE OVERLAPS
+  // Post-processing step: detects nodes that overlap within the same
+  // generation row and pushes everything to the right of the overlap point
+  // further right.  This guarantees a minimum gap of COL_GAP between every
+  // pair of adjacent nodes on the same row.
+  // =========================================================================
+  function resolveNodeOverlaps(nodes, nodeW, minGap) {
+    var nodeArr = Object.values(nodes);
+    if (nodeArr.length < 2) return;
+
+    // Group by Y (generation row)
+    var rowMap = {};
+    nodeArr.forEach(function (n) {
+      var key = Math.round(n.y);
+      if (!rowMap[key]) rowMap[key] = [];
+      rowMap[key].push(n);
+    });
+
+    var rowYs = Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; });
+
+    // Iterate until no overlaps remain (max 20 passes as safety net)
+    for (var pass = 0; pass < 20; pass++) {
+      var foundOverlap = false;
+
+      for (var ri = 0; ri < rowYs.length; ri++) {
+        var row = rowMap[rowYs[ri]].sort(function (a, b) { return a.x - b.x; });
+
+        for (var i = 1; i < row.length; i++) {
+          var requiredX = row[i - 1].x + nodeW + minGap;
+          if (row[i].x < requiredX) {
+            var shift = requiredX - row[i].x;
+            var cutoff = row[i].x;
+
+            // Protect nodes to the left of the overlap in this row
+            var leftInRow = {};
+            for (var j = 0; j < i; j++) leftInRow[row[j].id] = true;
+
+            // Shift the right group: everything at x >= cutoff except the left group
+            nodeArr.forEach(function (n) {
+              if (leftInRow[n.id]) return;
+              if (n.x >= cutoff) n.x += shift;
+            });
+
+            foundOverlap = true;
+            break;
+          }
+        }
+        if (foundOverlap) break;
+      }
+      if (!foundOverlap) break;
+    }
   }
 
   // =========================================================================

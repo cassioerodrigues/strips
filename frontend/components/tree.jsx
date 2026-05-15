@@ -112,6 +112,7 @@ function TreeNode({ p, x, y, focused, dimmed, isRoot, onClick, onSetRoot, onHove
   // Sex-based accent: men petrol, women terracotta
   const accentColor = p.sex === "F" ? "#a85d3a" : p.sex === "M" ? "#2c4a59" : "#a08658";
   const isLiving = !p.death;
+  const givenNames = [p.first, p.middle].filter(Boolean).join(" ");
 
   return (
     <div
@@ -132,7 +133,7 @@ function TreeNode({ p, x, y, focused, dimmed, isRoot, onClick, onSetRoot, onHove
       <div className="tnode-inner">
         <Avatar person={p} size={48}/>
         <div className="tnode-text">
-          <div className="tnode-name">{p.first}</div>
+          <div className="tnode-name" title={fullPersonName(p)}>{givenNames || fullPersonName(p)}</div>
           <div className="tnode-last">{p.last}</div>
           <div className="tnode-meta">
             {fmtLifespan(p)}
@@ -357,7 +358,7 @@ function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest =
           {selectedRootId && peopleById[selectedRootId] && (
             <span className="chip chip-root-indicator">
               <Icon name="pin" size={13}/>
-              {peopleById[selectedRootId].first} {peopleById[selectedRootId].last}
+              {fullPersonName(peopleById[selectedRootId])}
             </span>
           )}
         </div>
@@ -490,7 +491,7 @@ function HoverCard({ person }) {
     <div className="hover-card">
       <Avatar person={person} size={48}/>
       <div className="hover-card-text">
-        <div className="hover-card-name">{person.first} {person.last}</div>
+        <div className="hover-card-name">{fullPersonName(person)}</div>
         <div className="hover-card-meta">{person.occupation}</div>
         <div className="hover-card-life">{fmtLifespan(person)} · {person.birth?.place}</div>
       </div>

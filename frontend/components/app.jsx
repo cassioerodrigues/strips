@@ -79,12 +79,11 @@ function App() {
     if (!id) return "Pessoa";
     const fromApi = tree && tree.peopleById ? tree.peopleById[id] : null;
     if (fromApi) {
-      const full = [fromApi.first, fromApi.last].filter(Boolean).join(" ").trim();
-      return full || fromApi.displayName || "Pessoa";
+      return fullPersonName(fromApi, "Pessoa");
     }
     const fromFamily = window.FAMILY && window.FAMILY.people ? window.FAMILY.people[id] : null;
     if (fromFamily) {
-      return `${fromFamily.first || ""} ${fromFamily.last || ""}`.trim() || "Pessoa";
+      return fullPersonName(fromFamily, "Pessoa");
     }
     return "Pessoa";
   }

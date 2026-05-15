@@ -36,6 +36,8 @@
         last = parts.slice(1).join(" ");
       }
     }
+    const middle = p.middle_names || "";
+    const computedDisplayName = [first, middle, last].filter(Boolean).join(" ").trim();
 
     const hasDeath =
       p.death_year != null ||
@@ -52,12 +54,12 @@
     return {
       id: p.id,
       first: first,
-      middle: p.middle_names || "",
-      middleNames: p.middle_names || "",
+      middle: middle,
+      middleNames: middle,
       last: last,
       maiden: p.maiden_name || "",
       maidenName: p.maiden_name || "",
-      displayName: p.display_name || (first + (last ? " " + last : "")).trim(),
+      displayName: p.display_name || computedDisplayName,
       sex: p.sex || "U",
       isLiving: p.is_living !== false,
       birth: {

@@ -43,6 +43,7 @@ assert.equal(person.maiden, "Costa");
 assert.equal(person.maidenName, "Costa");
 assert.equal(person.middle, "das Dores");
 assert.equal(person.middleNames, "das Dores");
+assert.equal(person.displayName, "Maria das Dores Silva");
 assert.equal(person.generation, 3);
 assert.equal(person.createdAt, "2026-05-10T12:00:00Z");
 assert.equal(person.updatedAt, "2026-05-12T12:00:00Z");

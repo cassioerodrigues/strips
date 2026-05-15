@@ -117,6 +117,15 @@ function Avatar({ person, size = 40, showRing = false, ringColor }) {
   );
 }
 
+function fullPersonName(person, fallback = "Pessoa") {
+  if (!person) return fallback;
+  const first = person.first || person.first_name || "";
+  const middle = person.middle || person.middleNames || person.middle_names || "";
+  const last = person.last || person.last_name || "";
+  const fromParts = [first, middle, last].filter(Boolean).join(" ").trim();
+  return fromParts || person.displayName || person.display_name || fallback;
+}
+
 function shade(hex, percent) {
   // simple hex tweaker
   const h = hex.replace("#","");
@@ -136,7 +145,7 @@ function sidebarAdaptAuthPerson(person) {
 
 function sidebarFullName(person, profile) {
   if (person) {
-    const full = person.displayName || [person.first, person.last].filter(Boolean).join(" ").trim();
+    const full = fullPersonName(person, "");
     if (full) return full;
   }
   return (profile && profile.display_name) || "Usuário";
@@ -354,7 +363,7 @@ function CommandPalette({ open, onClose, onPersonClick }) {
 
   const all = Object.values(FAMILY.people);
   const filtered = q
-    ? all.filter(p => `${p.first} ${p.last}`.toLowerCase().includes(q.toLowerCase())
+    ? all.filter(p => fullPersonName(p, "").toLowerCase().includes(q.toLowerCase())
         || (p.occupation||"").toLowerCase().includes(q.toLowerCase())
         || (p.birth?.place||"").toLowerCase().includes(q.toLowerCase()))
     : all.slice(0, 6);
@@ -380,7 +389,7 @@ function CommandPalette({ open, onClose, onPersonClick }) {
             <button key={p.id} className="cmdk-item" onClick={() => { onPersonClick(p.id); onClose(); }}>
               <Avatar person={p} size={32}/>
               <div className="cmdk-item-text">
-                <div className="cmdk-item-name">{p.first} {p.last}</div>
+                <div className="cmdk-item-name">{fullPersonName(p)}</div>
                 <div className="cmdk-item-meta">{p.occupation} · {fmtLifespan(p)} · {p.birth?.place || ""}</div>
               </div>
               <Icon name="chev-right" size={14}/>
@@ -424,6 +433,6 @@ function MiniMap({ tone = "olive" }) {
 
 Object.assign(window, {
   Icon, Avatar, Sidebar, TopBar, Card, SectionTitle, Pill,
-  fmtLifespan, ageOrLived, CommandPalette, MiniMap, shade,
+  fullPersonName, fmtLifespan, ageOrLived, CommandPalette, MiniMap, shade,
   SIDEBAR_NAV, SIDEBAR_NAV_BOTTOM,
 });

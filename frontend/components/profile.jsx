@@ -330,7 +330,10 @@ function Profile({ personId, onBack, onPersonClick, onViewInTree }) {
             {p.tags?.map(t => <Pill key={t} tone="neutral">{t}</Pill>)}
             {!p.death && <Pill tone="olive">Vivendo</Pill>}
           </div>
-          <h1 className="profile-name">{p.first} <span>{p.last}</span></h1>
+          <h1 className="profile-name">
+            {[p.first, p.middle].filter(Boolean).join(" ")}
+            {p.last && <span> {p.last}</span>}
+          </h1>
           <div className="profile-meta">
             <span><Icon name="calendar" size={14}/> {fmtLifespan(p)}{p.death ? ` · ${ageOrLived(p)} anos` : ` · ${ageOrLived(p)} anos`}</span>
             <span><Icon name="pin" size={14}/> {p.birth?.place}</span>
@@ -798,7 +801,7 @@ function RelationGroup({ label, people, onPersonClick, action = null }) {
           >
             <Avatar person={p} size={44}/>
             <div className="rel-text">
-              <div className="rel-name">{p.first} {p.last}</div>
+              <div className="rel-name">{fullPersonName(p)}</div>
               <div className="rel-meta">{fmtLifespan(p)} · {p.occupation}</div>
               {action && action(p)}
             </div>
@@ -1052,12 +1055,12 @@ function eventTypeLabel(event) {
 
 function personFullName(person) {
   if (!person) return "pessoa desconhecida";
-  return person.displayName || [person.first, person.last].filter(Boolean).join(" ").trim() || "pessoa desconhecida";
+  return fullPersonName(person, "pessoa desconhecida");
 }
 
 function partnerName(person) {
   if (!person) return "—";
-  return person.first || person.displayName || [person.first_name, person.last_name].filter(Boolean).join(" ") || "—";
+  return fullPersonName(person, "—");
 }
 
 window.Profile = Profile;

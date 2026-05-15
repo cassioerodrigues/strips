@@ -310,7 +310,7 @@ function EditPersonModal({ open, person, people = null, unions = null, timeline 
       onClose={tryClose}
       size="lg"
       icon={<Avatar person={person} size={44}/>}
-      title={`Editar ${person?.first} ${person?.last}`}
+      title={`Editar ${fullPersonName(person)}`}
       subtitle="Atualize dados, datas e biografia. Alterações ficam registradas no histórico."
     >
       <div className="modal-tabs">
@@ -658,7 +658,7 @@ function AddEventModal({ open, person, people = null, unions = null, timeline = 
       size="md"
       icon={<div className="event-modal-ic"><Icon name={eventDef?.icon || "plus"} size={20}/></div>}
       title={editing ? "Editar evento da linha do tempo" : "Adicionar evento à linha do tempo"}
-      subtitle={person ? `Para ${person.first} ${person.last}` : "Selecione uma pessoa primeiro"}
+      subtitle={person ? `Para ${fullPersonName(person)}` : "Selecione uma pessoa primeiro"}
     >
       <div className="stepper">
         {["Tipo", "Quando & onde", "Detalhes"].map((label, i) => {

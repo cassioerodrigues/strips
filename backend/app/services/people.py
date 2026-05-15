@@ -353,22 +353,35 @@ def get_relations(conn: Connection, person_id: uuid.UUID) -> RelationsResponse:
 
 
 def get_person_events(conn: Connection, person_id: uuid.UUID) -> list[EventOut]:
-    """Retorna eventos onde person_id = id, ordenados por year."""
+    """Retorna eventos onde a pessoa e primaria ou relacionada."""
     # 404 se a pessoa não existir / RLS bloquear.
     get_person(conn, person_id)
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id, tree_id, person_id, union_id,
-                   type, custom_label,
-                   year, month, day, place, description,
-                   created_at
-            FROM events
-            WHERE person_id = %s
-            ORDER BY year NULLS LAST, month NULLS LAST, day NULLS LAST
+            SELECT e.id, e.tree_id, e.person_id, e.union_id,
+                   e.type, e.custom_label,
+                   e.year, e.month, e.day, e.place, e.description,
+                   e.created_at,
+                   COALESCE(
+                       array_agg(ep.person_id ORDER BY ep.person_id)
+                           FILTER (WHERE ep.person_id IS NOT NULL),
+                       ARRAY[]::uuid[]
+                   ) AS related_person_ids
+            FROM events e
+            LEFT JOIN event_people ep ON ep.event_id = e.id
+            WHERE e.person_id = %s
+               OR EXISTS (
+                   SELECT 1
+                   FROM event_people ep_filter
+                   WHERE ep_filter.event_id = e.id
+                     AND ep_filter.person_id = %s
+               )
+            GROUP BY e.id
+            ORDER BY e.year NULLS LAST, e.month NULLS LAST, e.day NULLS LAST, e.id ASC
             """,
-            (person_id,),
+            (person_id, person_id),
         )
         return [EventOut.model_validate(r) for r in cur.fetchall()]
 

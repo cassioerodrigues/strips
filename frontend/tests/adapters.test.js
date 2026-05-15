@@ -88,6 +88,31 @@ assert.deepEqual(plain(context.window.adapters.adaptMedia({
   downloadUrl: null,
 });
 
+assert.deepEqual(plain(context.window.adapters.adaptEvent({
+  id: "event-1",
+  tree_id: "tree-1",
+  person_id: "person-1",
+  union_id: null,
+  related_person_ids: ["person-2", "person-3"],
+  type: "residence",
+  year: 1999,
+  place: "Sao Paulo",
+})), {
+  id: "event-1",
+  treeId: "tree-1",
+  personId: "person-1",
+  unionId: null,
+  relatedPersonIds: ["person-2", "person-3"],
+  type: "residence",
+  customLabel: null,
+  year: 1999,
+  month: null,
+  day: null,
+  title: "Mudança",
+  place: "Sao Paulo",
+  description: "",
+});
+
 assert.deepEqual(plain(context.window.adapters.adaptDashboardActivity({
   id: "activity-1",
   kind: "person_created",

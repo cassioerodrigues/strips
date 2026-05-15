@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Literal replicando event_type_t do banco (0001_extensions_and_enums.sql)
 EventType = Literal[
@@ -62,6 +62,7 @@ EventType = Literal[
 class EventCreate(BaseModel):
     person_id: uuid.UUID | None = None
     union_id: uuid.UUID | None = None
+    related_person_ids: list[uuid.UUID] = Field(default_factory=list)
 
     type: EventType
     custom_label: str | None = None  # usado quando type='custom'
@@ -86,6 +87,8 @@ class EventCreate(BaseModel):
 
 
 class EventUpdate(BaseModel):
+    related_person_ids: list[uuid.UUID] | None = None
+
     type: EventType | None = None
     custom_label: str | None = None
 
@@ -108,6 +111,7 @@ class EventOut(BaseModel):
     tree_id: uuid.UUID
     person_id: uuid.UUID | None = None
     union_id: uuid.UUID | None = None
+    related_person_ids: list[uuid.UUID] = Field(default_factory=list)
 
     type: EventType
     custom_label: str | None = None

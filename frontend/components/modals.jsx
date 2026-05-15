@@ -607,7 +607,7 @@ function AddEventModal({ open, person, people = null, unions = null, timeline = 
         place: event ? (event.place || "") : "",
         country: "",
         description: event ? (event.note || event.description || "") : "",
-        relatedPeople: [],
+        relatedPeople: Array.isArray(event && event.relatedPersonIds) ? event.relatedPersonIds : [],
         marriageWith: "",
         otherParent: "",
         sources: event ? (event.source || "") : "",

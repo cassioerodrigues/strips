@@ -110,6 +110,7 @@ function plain(value) {
   assert.deepEqual(plain(api.eventPayloadFromForm({ type: "move", year: "1999", title: "", place: "SP", description: "" }, "p1")), {
     person_id: "p1",
     union_id: null,
+    related_person_ids: [],
     type: "residence",
     custom_label: null,
     year: 1999,
@@ -122,9 +123,26 @@ function plain(value) {
   assert.deepEqual(plain(api.eventPayloadFromForm({ type: "death", year: "2001", title: "Falecimento" }, "p1")), {
     person_id: "p1",
     union_id: null,
+    related_person_ids: [],
     type: "custom",
     custom_label: "Falecimento",
     year: 2001,
+    month: null,
+    day: null,
+    place: null,
+    description: null,
+  });
+
+  assert.deepEqual(plain(api.eventPayloadFromForm({
+    type: "education",
+    relatedPeople: ["p2", "p1", "p2", "", "p3"],
+  }, "p1")), {
+    person_id: "p1",
+    union_id: null,
+    related_person_ids: ["p2", "p3"],
+    type: "education",
+    custom_label: null,
+    year: null,
     month: null,
     day: null,
     place: null,

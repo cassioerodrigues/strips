@@ -174,6 +174,7 @@
       treeId: item.tree_id,
       personId: item.person_id || null,
       unionId: item.union_id || null,
+      relatedPersonIds: Array.isArray(item.related_person_ids) ? item.related_person_ids : [],
       type: item.type || "custom",
       customLabel: item.custom_label || null,
       year: item.year || null,

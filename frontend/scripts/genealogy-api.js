@@ -93,9 +93,12 @@
     const customLabel = mappedType === "custom"
       ? (title || CUSTOM_EVENT_LABELS[rawType] || "Evento")
       : null;
+    const relatedPersonIds = uniqueIds(form && form.relatedPeople)
+      .filter(function (id) { return id !== personId; });
     return {
       person_id: personId || null,
       union_id: unionId || null,
+      related_person_ids: relatedPersonIds,
       type: mappedType,
       custom_label: customLabel,
       year: cleanInt(form && form.year),

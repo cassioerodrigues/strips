@@ -631,12 +631,12 @@
           state.treeId,
           window.genealogyApi.eventPayloadFromForm(form, personId, null),
         );
-      }, [personId, form && form.marriageWith]);
+      }, [personId, form && form.marriageWith].concat(form && form.relatedPeople));
     },
     updateEvent: function (personId, eventId, form) {
       return mutateAndRefresh(function () {
         return window.genealogyApi.updateEvent(eventId, window.genealogyApi.eventPayloadFromForm(form, null, null));
-      }, personId);
+      }, [personId].concat(form && form.relatedPeople));
     },
     updateUnion: function (personId, unionId, payload) {
       return mutateAndRefresh(function () {

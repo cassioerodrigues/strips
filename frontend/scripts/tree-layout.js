@@ -862,33 +862,6 @@
           correctUnitsShift(family.children, -minStart);
         }
 
-        // Para o primeiro bloco ancestral do root, os avós diretos seguem o
-        // eixo pai/mãe, não o centro dos tios. Assim o ramo paterno fica sobre
-        // o pai e o materno sobre a mãe, mesmo quando tios ocupam mais espaço.
-        if (includeCollateralSiblings && ancestorUnit) {
-          var fatherIndex = -1;
-          var motherIndex = -1;
-          for (var ai = 0; ai < ancestorUnit.nodes.length; ai++) {
-            if (ancestorUnit.nodes[ai].gender === "male") fatherIndex = ai;
-            if (ancestorUnit.nodes[ai].gender === "female") motherIndex = ai;
-          }
-          var fatherX = fatherIndex >= 0 ? ancestorUnit.pos + fatherIndex * SIZE : null;
-          var motherX = motherIndex >= 0 ? ancestorUnit.pos + motherIndex * SIZE : null;
-          family.parents.forEach(function (pUnit) {
-            if (pUnit._ancestorSide === "paternal" && fatherX != null) {
-              pUnit.pos = fatherX - SIZE;
-            } else if (pUnit._ancestorSide === "maternal" && motherX != null) {
-              pUnit.pos = motherX;
-            }
-          });
-
-          var minAfterAlign = arrMin(family.parents.concat(family.children).map(prop("pos")));
-          if (minAfterAlign < 0) {
-            correctUnitsShift(family.parents, -minAfterAlign);
-            correctUnitsShift(family.children, -minAfterAlign);
-          }
-        }
-
         // Reordena o array de filhos para corresponder à ordem espacial (por pos).
         // Isso garante que arrangeNextFamily's slice(nextIdx) acerte o lado correto.
         family.children = paternalSiblings.concat([ancestorUnit]).concat(maternalSiblings);
@@ -1029,23 +1002,6 @@
           });
         }
 
-        // Mantém os avós diretos ancorados no eixo pai/mãe: avós paternos
-        // sobre o pai; avós maternos sobre a mãe. Tios não puxam os avós.
-        var fatherIndex = -1;
-        var motherIndex = -1;
-        for (var ni = 0; ni < anchorUnit.nodes.length; ni++) {
-          if (anchorUnit.nodes[ni].gender === "male") fatherIndex = ni;
-          if (anchorUnit.nodes[ni].gender === "female") motherIndex = ni;
-        }
-        var fatherX = fatherIndex >= 0 ? anchorUnit.pos + fatherIndex * SIZE : null;
-        var motherX = motherIndex >= 0 ? anchorUnit.pos + motherIndex * SIZE : null;
-        parentFam.parents.forEach(function (pUnit) {
-          if (pUnit._ancestorSide === "paternal" && fatherX != null) {
-            pUnit.pos = fatherX - SIZE;
-          } else if (pUnit._ancestorSide === "maternal" && motherX != null) {
-            pUnit.pos = motherX;
-          }
-        });
       }
     }
 

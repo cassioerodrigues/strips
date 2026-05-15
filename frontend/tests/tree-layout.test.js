@@ -246,8 +246,9 @@ const uncleSubtreeAlignmentLayout = context.window.treeLayout.computeApiTreeLayo
 );
 
 assert.ok(
-  uncleSubtreeAlignmentLayout.nodes["maternal-grandfather"].x === uncleSubtreeAlignmentLayout.nodes.mother.x,
-  "maternal grandparents should remain anchored over the mother instead of centering over maternal uncles",
+  uncleSubtreeAlignmentLayout.nodes["maternal-grandfather"].x < uncleSubtreeAlignmentLayout.nodes.mother.x &&
+    uncleSubtreeAlignmentLayout.nodes.mother.x < uncleSubtreeAlignmentLayout.nodes["maternal-grandmother"].x,
+  "maternal grandparents may be pulled toward the center when maternal uncles are present",
 );
 assert.ok(
   uncleSubtreeAlignmentLayout.nodes["sibling-spouse"].x < uncleSubtreeAlignmentLayout.nodes["maternal-uncle"].x,

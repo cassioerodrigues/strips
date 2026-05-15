@@ -174,7 +174,11 @@ function Sidebar({ current, onNavigate, collapsed }) {
 
       <nav className="sb-nav">
         {SIDEBAR_NAV_BOTTOM.map(item => (
-          <button key={item.id} className="sb-item" onClick={() => onNavigate(item.id)}>
+          <button
+            key={item.id}
+            className={"sb-item " + (current === item.id ? "sb-item-active" : "")}
+            onClick={() => onNavigate(item.id)}
+          >
             <Icon name={item.icon} size={17}/>
             <span>{item.label}</span>
           </button>

@@ -166,6 +166,13 @@ def run_seed(
         "UPDATE profiles SET display_name = %s WHERE id = %s",
         (owner_display, owner_id),
     ))
+    stmts.append((
+        """INSERT INTO user_subscriptions(user_id, plan_code, status)
+           VALUES (%s, 'family', 'active')
+           ON CONFLICT (user_id) WHERE status = 'active'
+           DO UPDATE SET plan_code = EXCLUDED.plan_code, updated_at = now()""",
+        (owner_id,),
+    ))
 
     # 3. tree
     stmts.append((
@@ -230,6 +237,12 @@ def run_seed(
             ),
         ))
         persons_count += 1
+
+    if "p_helena" in id_map:
+        stmts.append((
+            "UPDATE tree_members SET person_id = %s WHERE tree_id = %s AND user_id = %s",
+            (id_map["p_helena"], tree_id, owner_id),
+        ))
 
     # 6. person_parents
     parents_count = 0

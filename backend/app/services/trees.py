@@ -12,7 +12,8 @@ from fastapi import HTTPException, status
 from psycopg import Connection
 from psycopg.rows import dict_row
 
-from app.schemas.auth import MeResponse, ProfileOut, TreeMembershipOut
+from app.schemas.auth import MeResponse, ProfileOut, SubscriptionOut, TreeMembershipOut
+from app.schemas.person import PersonOut
 from app.schemas.tree import TreeCreate, TreeOut, TreeUpdate
 
 
@@ -43,9 +44,34 @@ def get_me(conn: Connection, user_sub: uuid.UUID) -> MeResponse:
         cur.execute(
             """
             SELECT
+                sp.code,
+                sp.name,
+                sp.collaborator_limit
+            FROM user_subscriptions us
+            JOIN subscription_plans sp ON sp.code = us.plan_code
+            WHERE us.user_id = %s
+              AND us.status = 'active'
+              AND (us.current_period_end IS NULL OR us.current_period_end > now())
+            ORDER BY us.created_at DESC
+            LIMIT 1
+            """,
+            (user_sub,),
+        )
+        subscription_row = cur.fetchone()
+
+    subscription = SubscriptionOut.model_validate(
+        subscription_row
+        or {"code": "free", "name": "Gratis", "collaborator_limit": 0}
+    )
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT
                 tm.role,
                 tm.joined_at,
                 tm.person_id,
+                GREATEST(COUNT(tm_all.user_id) - 1, 0)::int AS collaborators_count,
                 t.id          AS tree_id,
                 t.owner_id    AS tree_owner_id,
                 t.name        AS tree_name,
@@ -54,7 +80,11 @@ def get_me(conn: Connection, user_sub: uuid.UUID) -> MeResponse:
                 t.updated_at  AS tree_updated_at
             FROM tree_members tm
             JOIN trees t ON t.id = tm.tree_id
+            LEFT JOIN tree_members tm_all ON tm_all.tree_id = tm.tree_id
             WHERE tm.user_id = %s
+            GROUP BY
+                tm.role, tm.joined_at, tm.person_id,
+                t.id, t.owner_id, t.name, t.description, t.created_at, t.updated_at
             ORDER BY tm.joined_at DESC
             """,
             (user_sub,),
@@ -77,10 +107,40 @@ def get_me(conn: Connection, user_sub: uuid.UUID) -> MeResponse:
                 role=row["role"],
                 joined_at=row["joined_at"],
                 person_id=row.get("person_id"),
+                collaborators_count=row.get("collaborators_count") or 0,
             )
         )
 
-    return MeResponse(profile=profile, trees=memberships)
+    person = None
+    primary_person_id = memberships[0].person_id if memberships else None
+    if primary_person_id:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT
+                    id, tree_id,
+                    first_name, middle_names, last_name, maiden_name, display_name,
+                    sex, is_living,
+                    birth_year, birth_month, birth_day, birth_place,
+                    death_year, death_month, death_day, death_place, death_cause,
+                    occupation, bio, tags, photo_media_id,
+                    family_search_id, gedcom_id, external_ids,
+                    created_by, created_at, updated_at
+                FROM persons
+                WHERE id = %s
+                """,
+                (primary_person_id,),
+            )
+            person_row = cur.fetchone()
+        if person_row is not None:
+            person = PersonOut.model_validate(person_row)
+
+    return MeResponse(
+        profile=profile,
+        trees=memberships,
+        subscription=subscription,
+        person=person,
+    )
 
 
 # ---------------------------------------------------------------------------

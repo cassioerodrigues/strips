@@ -26,6 +26,8 @@
     session: null,
     profile: null,
     trees: [],
+    subscription: null,
+    person: null,
     error: null,
   };
 
@@ -158,6 +160,8 @@
       setState({
         profile: (data && data.profile) || null,
         trees: (data && data.trees) || [],
+        subscription: (data && data.subscription) || null,
+        person: (data && data.person) || null,
         error: null,
       });
     } catch (e) {
@@ -174,6 +178,8 @@
           session: null,
           profile: null,
           trees: [],
+          subscription: null,
+          person: null,
           error: "Sua sessão expirou. Faça login novamente.",
         });
         return;
@@ -223,6 +229,8 @@
           session: null,
           profile: null,
           trees: [],
+          subscription: null,
+          person: null,
         });
         return;
       }
@@ -291,6 +299,8 @@
       session: null,
       profile: null,
       trees: [],
+      subscription: null,
+      person: null,
       error: null,
     });
   }
@@ -327,6 +337,8 @@
       session: snap.session,
       profile: snap.profile,
       trees: snap.trees,
+      subscription: snap.subscription,
+      person: snap.person,
       error: snap.error,
       signInWithPassword: signInWithPassword,
       signUpWithPassword: signUpWithPassword,

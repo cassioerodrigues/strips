@@ -74,6 +74,7 @@ function Avatar({ person, size = 40, showRing = false, ringColor }) {
   };
   const t = sexTones[person?.sex] || sexTones.U;
   const initials = person ? `${(person.first||"")[0]||""}${(person.last||"").split(" ").slice(-1)[0]?.[0]||""}` : "?";
+  const imageUrl = person && (person.avatarUrl || person.photoUrl || person.imageUrl);
   return (
     <div className="avatar-wrap" style={{ width: size, height: size, position: "relative" }}>
       {showRing && (
@@ -95,12 +96,22 @@ function Avatar({ person, size = 40, showRing = false, ringColor }) {
         overflow: "hidden",
         position: "relative",
       }}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
+          />
+        ) : (
+          <>
         {/* faux-photo gradient */}
         <div style={{
           position: "absolute", inset: 0,
           background: `radial-gradient(ellipse at 30% 25%, rgba(255,255,255,0.45), transparent 55%), linear-gradient(155deg, ${t.bg} 0%, ${shade(t.bg, -8)} 100%)`,
         }}/>
         <span style={{ position: "relative", zIndex: 1 }}>{initials}</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -117,8 +128,75 @@ function shade(hex, percent) {
   return "#"+[cl(r),cl(g),cl(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 
+function sidebarAdaptAuthPerson(person) {
+  if (!person) return null;
+  const adapt = window.adapters && window.adapters.adaptPerson;
+  return adapt ? adapt(person) : person;
+}
+
+function sidebarFullName(person, profile) {
+  if (person) {
+    const full = person.displayName || [person.first, person.last].filter(Boolean).join(" ").trim();
+    if (full) return full;
+  }
+  return (profile && profile.display_name) || "Usuário";
+}
+
+function sidebarPlanLabel(auth) {
+  const subscription = (auth && auth.subscription) || {};
+  const membership = auth && Array.isArray(auth.trees) && auth.trees.length > 0 ? auth.trees[0] : null;
+  const planName = subscription.name || "Gratis";
+  const collaborators = membership && Number.isFinite(Number(membership.collaborators_count))
+    ? Number(membership.collaborators_count)
+    : 0;
+  const suffix = collaborators === 1 ? "colaborador" : "colaboradores";
+  return `Plano ${planName} - ${collaborators} ${suffix}`;
+}
+
 // Sidebar
 function Sidebar({ current, onNavigate, collapsed }) {
+  const auth = window.useAuth ? window.useAuth() : { profile: null, trees: [] };
+  const tree = window.useTree ? window.useTree() : { peopleById: {}, myPersonId: null };
+  const [avatarUrl, setAvatarUrl] = React.useState(null);
+
+  const membership = auth && Array.isArray(auth.trees) && auth.trees.length > 0 ? auth.trees[0] : null;
+  const personId = (tree && tree.myPersonId) || (membership && membership.person_id) || null;
+  const authPerson = sidebarAdaptAuthPerson(auth && auth.person);
+  const treePerson = personId && tree && tree.peopleById ? tree.peopleById[personId] : null;
+  const userPersonBase = treePerson || authPerson || null;
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setAvatarUrl(null);
+    if (!personId || !window.genealogyApi || typeof window.genealogyApi.listPersonMedia !== "function") return undefined;
+    if (userPersonBase && userPersonBase.avatarUrl) return undefined;
+
+    window.genealogyApi.listPersonMedia(personId)
+      .then(function (items) {
+        if (cancelled) return null;
+        const media = Array.isArray(items)
+          ? items.find(function (item) { return item && (item.kind === "photo" || (item.mime_type || "").indexOf("image/") === 0); })
+          : null;
+        if (!media || !media.id || !window.genealogyApi.getMediaDownloadUrl) return null;
+        return window.genealogyApi.getMediaDownloadUrl(media.id);
+      })
+      .then(function (signed) {
+        if (cancelled || !signed) return;
+        setAvatarUrl(signed.url || signed.download_url || null);
+      })
+      .catch(function () {
+        if (!cancelled) setAvatarUrl(null);
+      });
+
+    return function () {
+      cancelled = true;
+    };
+  }, [personId, userPersonBase && userPersonBase.avatarUrl]);
+
+  const userPerson = userPersonBase ? Object.assign({}, userPersonBase, { avatarUrl: avatarUrl || userPersonBase.avatarUrl }) : null;
+  const userName = sidebarFullName(userPerson, auth && auth.profile);
+  const planLabel = sidebarPlanLabel(auth);
+
   return (
     <aside className={"sb " + (collapsed ? "sb-collapsed" : "")}>
       <div className="sb-brand">
@@ -186,12 +264,14 @@ function Sidebar({ current, onNavigate, collapsed }) {
       </nav>
 
       <div className="sb-user">
-        <Avatar person={FAMILY.people.p_helena} size={32}/>
+        <Avatar person={userPerson} size={32}/>
         <div className="sb-user-text">
-          <div className="sb-user-name">Helena B. Albuquerque</div>
-          <div className="sb-user-plan">Plano Família · 4 colaboradores</div>
+          <div className="sb-user-name">{userName}</div>
+          <div className="sb-user-plan">{planLabel}</div>
         </div>
-        <button className="sb-user-more"><Icon name="more" size={16}/></button>
+        <button className="sb-user-more" onClick={() => onNavigate("settings")} title="Configurações">
+          <Icon name="more" size={16}/>
+        </button>
       </div>
     </aside>
   );

@@ -7,8 +7,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.person import PersonOut
 from app.schemas.tree import TreeOut, TreeRole
 
 
@@ -42,6 +43,15 @@ class TreeMembershipOut(BaseModel):
     role: TreeRole
     joined_at: datetime | None = None
     person_id: uuid.UUID | None = None
+    collaborators_count: int = 0
+
+
+class SubscriptionOut(BaseModel):
+    """Plano atualmente associado ao usuário autenticado."""
+
+    code: str
+    name: str
+    collaborator_limit: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -56,3 +66,7 @@ class MeResponse(BaseModel):
 
     profile: ProfileOut
     trees: list[TreeMembershipOut] = []
+    subscription: SubscriptionOut = Field(
+        default_factory=lambda: SubscriptionOut(code="free", name="Gratis", collaborator_limit=0)
+    )
+    person: PersonOut | None = None

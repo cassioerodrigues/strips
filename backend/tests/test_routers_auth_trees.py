@@ -17,7 +17,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
-from app.schemas.auth import MeResponse, ProfileOut, TreeMembershipOut
+from app.schemas.auth import MeResponse, ProfileOut, SubscriptionOut, TreeMembershipOut
 from app.schemas.tree import TreeOut
 
 
@@ -60,6 +60,10 @@ def _make_profile_out() -> ProfileOut:
         created_at=NOW,
         updated_at=NOW,
     )
+
+
+def _make_subscription_out() -> SubscriptionOut:
+    return SubscriptionOut(code="free", name="Gratis", collaborator_limit=0)
 
 
 # ---------------------------------------------------------------------------
@@ -194,17 +198,18 @@ class TestMeResponseSchema:
         profile = _make_profile_out()
         tree = _make_tree_out()
         membership = TreeMembershipOut(tree=tree, role="owner", joined_at=NOW)
-        me = MeResponse(profile=profile, trees=[membership])
+        me = MeResponse(profile=profile, trees=[membership], subscription=_make_subscription_out())
 
         assert me.profile.display_name == "Usuário Teste"
         assert len(me.trees) == 1
         assert me.trees[0].role == "owner"
         assert me.trees[0].tree.name == "Família Teste"
+        assert me.subscription.code == "free"
 
     def test_me_response_empty_trees(self):
         """MeResponse com trees=[] é válido."""
         profile = _make_profile_out()
-        me = MeResponse(profile=profile, trees=[])
+        me = MeResponse(profile=profile, trees=[], subscription=_make_subscription_out())
         assert me.trees == []
 
     def test_me_response_json_roundtrip(self):
@@ -212,7 +217,7 @@ class TestMeResponseSchema:
         profile = _make_profile_out()
         tree = _make_tree_out()
         membership = TreeMembershipOut(tree=tree, role="editor", joined_at=NOW)
-        me = MeResponse(profile=profile, trees=[membership])
+        me = MeResponse(profile=profile, trees=[membership], subscription=_make_subscription_out())
 
         json_str = me.model_dump_json()
         me2 = MeResponse.model_validate_json(json_str)

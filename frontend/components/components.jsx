@@ -154,7 +154,7 @@ function sidebarPlanLabel(auth) {
 }
 
 // Sidebar
-function Sidebar({ current, onNavigate, collapsed }) {
+function Sidebar({ current, onNavigate, onAddPerson, collapsed }) {
   const auth = window.useAuth ? window.useAuth() : { profile: null, trees: [] };
   const tree = window.useTree ? window.useTree() : { peopleById: {}, myPersonId: null };
   const [avatarUrl, setAvatarUrl] = React.useState(null);
@@ -209,7 +209,7 @@ function Sidebar({ current, onNavigate, collapsed }) {
         </div>
       </div>
 
-      <button className="sb-add">
+      <button className="sb-add" onClick={onAddPerson}>
         <Icon name="plus" size={16} />
         <span>Adicionar pessoa</span>
         <kbd>N</kbd>

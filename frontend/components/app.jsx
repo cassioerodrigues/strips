@@ -16,6 +16,7 @@ function App() {
   const [route, setRoute] = React.useState("tree"); // landing on tree per priority
   const [personId, setPersonId] = React.useState("p_giuseppe");
   const [cmdkOpen, setCmdkOpen] = React.useState(false);
+  const [addPersonRequest, setAddPersonRequest] = React.useState(0);
 
   // apply tweaks via root data attrs
   React.useEffect(() => {
@@ -61,6 +62,11 @@ function App() {
     setRoute("profile");
   }
 
+  function openAddPerson() {
+    setRoute("tree");
+    setAddPersonRequest(n => n + 1);
+  }
+
   // Resolve um person id (UUID da API ou id mock "p_*") consultando primeiro o
   // snapshot do useTree() e caindo no FAMILY mock como fallback.
   function lookupPersonName(id) {
@@ -94,7 +100,7 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar current={route === "profile" || route === "people" ? "people" : route} onNavigate={navigate}/>
+      <Sidebar current={route === "profile" || route === "people" ? "people" : route} onNavigate={navigate} onAddPerson={openAddPerson}/>
       <main className="main">
         <TopBar
           breadcrumbs={breadcrumbs}
@@ -120,7 +126,7 @@ function App() {
           }
         />
         {route === "dashboard" && <Dashboard onNavigate={navigate} onPersonClick={openPerson}/>}
-        {route === "tree" && <FamilyTree onPersonClick={openPerson} density={t.density}/>}
+        {route === "tree" && <FamilyTree onPersonClick={openPerson} density={t.density} addPersonRequest={addPersonRequest}/>}
         {route === "profile" && <Profile personId={personId} onBack={() => setRoute("tree")} onPersonClick={openPerson}/>}
         {route === "search" && <SearchPage onPersonClick={openPerson}/>}
         {route === "documents" && <DocumentsPage/>}

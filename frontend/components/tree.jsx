@@ -144,7 +144,7 @@ function TreeNode({ p, x, y, focused, dimmed, isRoot, onClick, onSetRoot, onHove
   );
 }
 
-function FamilyTree({ onPersonClick, density = "comfortable" }) {
+function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest = 0 }) {
   const F = window.FAMILY || { people: {}, unions: [] };
   const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
   const useMockFallback = tree.status === "unavailable";
@@ -205,6 +205,10 @@ function FamilyTree({ onPersonClick, density = "comfortable" }) {
   const [mutation, setMutation] = React.useState({ saving: false, error: null });
   const containerRef = React.useRef(null);
   const dragRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (addPersonRequest > 0) setAddOpen(true);
+  }, [addPersonRequest]);
 
   // initial center
   React.useEffect(() => {

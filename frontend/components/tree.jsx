@@ -144,7 +144,7 @@ function TreeNode({ p, x, y, focused, dimmed, isRoot, onClick, onSetRoot, onHove
   );
 }
 
-function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest = 0 }) {
+function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest = 0, rootPersonId: requestedRootPersonId = null }) {
   const F = window.FAMILY || { people: {}, unions: [] };
   const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [] };
   const useMockFallback = tree.status === "unavailable";
@@ -209,6 +209,12 @@ function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest =
   React.useEffect(() => {
     if (addPersonRequest > 0) setAddOpen(true);
   }, [addPersonRequest]);
+
+  React.useEffect(() => {
+    if (requestedRootPersonId && availableRootIds.includes(requestedRootPersonId)) {
+      setRootPersonId(requestedRootPersonId);
+    }
+  }, [requestedRootPersonId, availableRootIds]);
 
   // initial center
   React.useEffect(() => {

@@ -1,6 +1,6 @@
 // Person profile page
 
-function Profile({ personId, onBack, onPersonClick }) {
+function Profile({ personId, onBack, onPersonClick, onViewInTree }) {
   const F = window.FAMILY;
   const tree = window.useTree ? window.useTree() : { status: "unavailable", people: [], canEdit: false };
   // usePerson() retorna { status, person, relations, error }. Casos:
@@ -696,7 +696,7 @@ function Profile({ personId, onBack, onPersonClick }) {
           <Card padding={20}>
             <div className="side-head">
               <span className="eyebrow">Posição na árvore</span>
-              <button className="link">Ver na árvore →</button>
+              <button className="link" onClick={() => onViewInTree && onViewInTree(p.id)}>Ver na árvore →</button>
             </div>
             <div className="mini-tree">
               {parents.length > 0 && (

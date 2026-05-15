@@ -15,6 +15,7 @@ function App() {
   const t = window.useTweaks ? window.useTweaks(TWEAK_DEFAULTS) : { ...TWEAK_DEFAULTS };
   const [route, setRoute] = React.useState("tree"); // landing on tree per priority
   const [personId, setPersonId] = React.useState("p_giuseppe");
+  const [treeRootPersonId, setTreeRootPersonId] = React.useState(null);
   const [cmdkOpen, setCmdkOpen] = React.useState(false);
   const [addPersonRequest, setAddPersonRequest] = React.useState(0);
 
@@ -60,6 +61,11 @@ function App() {
   function openPerson(id) {
     setPersonId(id);
     setRoute("profile");
+  }
+
+  function openTreeAtPerson(id) {
+    if (id) setTreeRootPersonId(id);
+    setRoute("tree");
   }
 
   function openAddPerson() {
@@ -126,8 +132,8 @@ function App() {
           }
         />
         {route === "dashboard" && <Dashboard onNavigate={navigate} onPersonClick={openPerson}/>}
-        {route === "tree" && <FamilyTree onPersonClick={openPerson} density={t.density} addPersonRequest={addPersonRequest}/>}
-        {route === "profile" && <Profile personId={personId} onBack={() => setRoute("tree")} onPersonClick={openPerson}/>}
+        {route === "tree" && <FamilyTree onPersonClick={openPerson} density={t.density} addPersonRequest={addPersonRequest} rootPersonId={treeRootPersonId}/>}
+        {route === "profile" && <Profile personId={personId} onBack={() => setRoute("tree")} onPersonClick={openPerson} onViewInTree={openTreeAtPerson}/>}
         {route === "search" && <SearchPage onPersonClick={openPerson}/>}
         {route === "documents" && <DocumentsPage/>}
         {route === "people" && <PeoplePage onPersonClick={openPerson}/>}

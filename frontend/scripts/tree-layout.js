@@ -86,10 +86,15 @@
     return function (item) { return types.indexOf(item.type) !== -1; };
   }
 
-  // Comparador de ordenação por gênero: coloca o gênero alvo por último.
-  // Usado para posicionar o casal na ordem correta (ex: pai à esquerda, mãe à direita).
-  function byGender(targetGender) {
-    return function (a, b) { return b.gender !== targetGender ? -1 : 1; };
+  // Comparador de ordenação por gênero: pai/homem à esquerda, mãe/mulher à direita.
+  // Mantém a ascendência direta como ramo paterno à esquerda e materno à direita.
+  function byGender() {
+    var rank = { male: 0, female: 1 };
+    return function (a, b) {
+      var ar = rank[a.gender] != null ? rank[a.gender] : 2;
+      var br = rank[b.gender] != null ? rank[b.gender] : 2;
+      return ar - br;
+    };
   }
 
   // Verifica se um nó tem pais de tipos diferentes (ex: biológico + adotivo).
@@ -618,20 +623,56 @@
       }
     });
 
+    function createChildFamilyFor(parentUnit) {
+        var family = createFamily(nodeIds(parentUnit), FAMILY_TYPE_CHILD);
+        updateFamily(family, parentUnit);
+      return family;
+    }
+
     // Expande filhos dos tios/tias posicionados em famílias PARENT.
     // Como a direção ancestral só inclui irmãos no primeiro nível acima do
     // root, isso mostra primos de primeiro grau sem trazer tios-avós.
     store.familiesArray.filter(withFamilyType(FAMILY_TYPE_PARENT)).forEach(function (parentFamily) {
       var siblingUnits = parentFamily.children.filter(function (unit) {
         return !unit._isAncestorLink && hasChildrenFn(unit);
-      }).reverse();
-
-      siblingUnits.forEach(function (parentUnit) {
-        var family = createFamily(nodeIds(parentUnit), FAMILY_TYPE_CHILD);
-        updateFamily(family, parentUnit);
-        arrangeFamilies(family);
-        store.families[family.id] = family;
       });
+
+      if (parentFamily.cid === store.rootFamily.id) {
+        var paternalEntries = [];
+        var maternalEntries = [];
+
+        siblingUnits.forEach(function (parentUnit) {
+          var family = createChildFamilyFor(parentUnit);
+          var entry = { unit: parentUnit, family: family, width: widthOf(family) };
+          if (parentUnit._collateralSide === "paternal") paternalEntries.push(entry);
+          else maternalEntries.push(entry);
+        });
+
+        var totalPaternalWidth = paternalEntries.reduce(function (sum, entry) {
+          return sum + entry.width;
+        }, 0);
+        var leftCursor = store.rootFamily.X - totalPaternalWidth;
+        paternalEntries.forEach(function (entry) {
+          entry.unit.pos = leftCursor - parentFamily.X;
+          entry.family.X = leftCursor;
+          store.families[entry.family.id] = entry.family;
+          leftCursor += entry.width;
+        });
+
+        var rightCursor = rightOf(store.rootFamily);
+        maternalEntries.forEach(function (entry) {
+          entry.unit.pos = rightCursor - parentFamily.X;
+          entry.family.X = rightCursor;
+          store.families[entry.family.id] = entry.family;
+          rightCursor += entry.width;
+        });
+      } else {
+        siblingUnits.slice().reverse().forEach(function (parentUnit) {
+          var family = createChildFamilyFor(parentUnit);
+          arrangeFamilies(family);
+          store.families[family.id] = family;
+        });
+      }
     });
 
     return store;
@@ -657,7 +698,16 @@
       var parentUnits = [];
       childNodes.forEach(function (child) {
         var parentNodes = store.getNodes(child.parents.map(prop("id"))).sort(byGender(store.root.gender));
-        if (parentNodes.length) parentUnits.push(newUnit(family.id, parentNodes));
+        if (parentNodes.length) {
+          var parentUnit = newUnit(family.id, parentNodes);
+          parentUnit._ancestorChildId = child.id;
+          parentUnit._ancestorSide = child.gender === "male"
+            ? "paternal"
+            : child.gender === "female"
+            ? "maternal"
+            : null;
+          parentUnits.push(parentUnit);
+        }
       });
       family.parents = parentUnits;
 
@@ -713,14 +763,14 @@
       });
 
       // ---------------------------------------------------------------
-      // Para famílias multi-parent: posiciona irmãos de modo que o
-      // barramento de cada casal de avós fique do seu próprio lado
+      // Para famílias com colaterais/múltiplos pais: posiciona irmãos de modo
+      // que o barramento de cada casal de avós fique do seu próprio lado
       // (sem cruzamentos).
       //
       // Regra: o link ancestral fica no ramo PRINCIPAL.
-      //   • Ancestral paterno (esquerda / parentUnits[0]):
+      //   • Irmãos do ancestral paterno:
       //       seus irmãos vão para a ESQUERDA do link ancestral.
-      //   • Ancestral materno (direita / parentUnits[1]):
+      //   • Irmãos do ancestral materno:
       //       seus irmãos vão para a DIREITA do link ancestral.
       //
       // Layout: [irmãos paternos] [link ancestral] [irmãos maternos]
@@ -728,7 +778,7 @@
       // ---------------------------------------------------------------
       family.children = childUnitsResult;
 
-      if (parentUnits.length > 1) {
+      if (parentUnits.length > 1 || (includeCollateralSiblings && parentUnits.length > 0)) {
         // Constrói lookup: childId → índice da unidade de pais dona
         var childOwner = {};
         parentUnits.forEach(function (pUnit, pIdx) {
@@ -751,8 +801,20 @@
               break;
             }
           }
-          if (owner === 0) paternalSiblings.push(cUnit);
-          else maternalSiblings.push(cUnit);
+          var ownerSide = owner >= 0 && parentUnits[owner] ? parentUnits[owner]._ancestorSide : null;
+          if (ownerSide === "paternal") {
+            cUnit._collateralSide = "paternal";
+            paternalSiblings.push(cUnit);
+          } else if (ownerSide === "maternal") {
+            cUnit._collateralSide = "maternal";
+            maternalSiblings.push(cUnit);
+          } else if (owner === 0) {
+            cUnit._collateralSide = "paternal";
+            paternalSiblings.push(cUnit);
+          } else {
+            cUnit._collateralSide = "maternal";
+            maternalSiblings.push(cUnit);
+          }
         }
 
         // Posiciona filhos: [irmãos paternos] [link ancestral] [irmãos maternos]
@@ -800,10 +862,37 @@
           correctUnitsShift(family.children, -minStart);
         }
 
+        // Para o primeiro bloco ancestral do root, os avós diretos seguem o
+        // eixo pai/mãe, não o centro dos tios. Assim o ramo paterno fica sobre
+        // o pai e o materno sobre a mãe, mesmo quando tios ocupam mais espaço.
+        if (includeCollateralSiblings && ancestorUnit) {
+          var fatherIndex = -1;
+          var motherIndex = -1;
+          for (var ai = 0; ai < ancestorUnit.nodes.length; ai++) {
+            if (ancestorUnit.nodes[ai].gender === "male") fatherIndex = ai;
+            if (ancestorUnit.nodes[ai].gender === "female") motherIndex = ai;
+          }
+          var fatherX = fatherIndex >= 0 ? ancestorUnit.pos + fatherIndex * SIZE : null;
+          var motherX = motherIndex >= 0 ? ancestorUnit.pos + motherIndex * SIZE : null;
+          family.parents.forEach(function (pUnit) {
+            if (pUnit._ancestorSide === "paternal" && fatherX != null) {
+              pUnit.pos = fatherX - SIZE;
+            } else if (pUnit._ancestorSide === "maternal" && motherX != null) {
+              pUnit.pos = motherX;
+            }
+          });
+
+          var minAfterAlign = arrMin(family.parents.concat(family.children).map(prop("pos")));
+          if (minAfterAlign < 0) {
+            correctUnitsShift(family.parents, -minAfterAlign);
+            correctUnitsShift(family.children, -minAfterAlign);
+          }
+        }
+
         // Reordena o array de filhos para corresponder à ordem espacial (por pos).
         // Isso garante que arrangeNextFamily's slice(nextIdx) acerte o lado correto.
         family.children = paternalSiblings.concat([ancestorUnit]).concat(maternalSiblings);
-        family._multiParent = true;
+        family._multiParent = parentUnits.length > 1;
       } else {
         setDefaultUnitShift(family);
       }
@@ -929,6 +1018,33 @@
         var shift = getUnitX(parentFam, anchorUnit) - getUnitX(rootFamily, rootFamily.parents[0]);
         families.filter(withFamilyType(FAMILY_TYPE_CHILD, FAMILY_TYPE_ROOT)).forEach(function (f) {
           f.X += shift;
+        });
+
+        // Os tios com filhos geram famílias CHILD próprias. Quando a linha
+        // root/child é deslocada, move também a unidade do tio/tia dentro da
+        // família ancestral para manter pais e filhos na mesma coluna.
+        if (shift !== 0) {
+          parentFam.children.forEach(function (unit) {
+            if (!unit._isAncestorLink && hasChildrenFn(unit)) unit.pos += shift;
+          });
+        }
+
+        // Mantém os avós diretos ancorados no eixo pai/mãe: avós paternos
+        // sobre o pai; avós maternos sobre a mãe. Tios não puxam os avós.
+        var fatherIndex = -1;
+        var motherIndex = -1;
+        for (var ni = 0; ni < anchorUnit.nodes.length; ni++) {
+          if (anchorUnit.nodes[ni].gender === "male") fatherIndex = ni;
+          if (anchorUnit.nodes[ni].gender === "female") motherIndex = ni;
+        }
+        var fatherX = fatherIndex >= 0 ? anchorUnit.pos + fatherIndex * SIZE : null;
+        var motherX = motherIndex >= 0 ? anchorUnit.pos + motherIndex * SIZE : null;
+        parentFam.parents.forEach(function (pUnit) {
+          if (pUnit._ancestorSide === "paternal" && fatherX != null) {
+            pUnit.pos = fatherX - SIZE;
+          } else if (pUnit._ancestorSide === "maternal" && motherX != null) {
+            pUnit.pos = motherX;
+          }
         });
       }
     }

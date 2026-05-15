@@ -711,8 +711,9 @@
           });
         });
       }
-      // Child nodes (only for root and child families)
-      if (family.type === FAMILY_TYPE_ROOT || family.type === FAMILY_TYPE_CHILD) {
+      // Child nodes (for root, child, AND parent families — parent families
+      // now include siblings of ancestors alongside the direct ancestor link)
+      if (family.type === FAMILY_TYPE_ROOT || family.type === FAMILY_TYPE_CHILD || family.type === FAMILY_TYPE_PARENT) {
         family.children.forEach(function (unit) {
           var topOffset = unit.child && family.parents.length > 0 ? SIZE : 0;
           unit.nodes.forEach(function (node, idx) {

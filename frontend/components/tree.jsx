@@ -206,9 +206,13 @@ function FamilyTree({ onPersonClick, density = "comfortable", addPersonRequest =
   const [mutation, setMutation] = React.useState({ saving: false, error: null });
   const containerRef = React.useRef(null);
   const dragRef = React.useRef(null);
+  const prevAddReq = React.useRef(addPersonRequest);
 
   React.useEffect(() => {
-    if (addPersonRequest > 0) setAddOpen(true);
+    if (addPersonRequest > prevAddReq.current) {
+      setAddOpen(true);
+    }
+    prevAddReq.current = addPersonRequest;
   }, [addPersonRequest]);
 
   React.useEffect(() => {

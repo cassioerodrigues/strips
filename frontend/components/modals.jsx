@@ -80,6 +80,18 @@ function collectPlaceSuggestions({ people = [], unions = [], timeline = [], extr
   return Object.values(map).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
 }
 
+function collectCountrySuggestions({ people = [], unions = [], timeline = [], extra = [] } = {}) {
+  const map = {};
+  people.forEach(p => {
+    addPlaceSuggestion(map, p?.birth?.country);
+    addPlaceSuggestion(map, p?.death?.country);
+  });
+  unions.forEach(u => addPlaceSuggestion(map, u?.country));
+  timeline.forEach(item => addPlaceSuggestion(map, item?.country));
+  extra.forEach(c => addPlaceSuggestion(map, c));
+  return Object.values(map).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+}
+
 function PlaceInput({ value, onChange, placeholder, suggestions = [] }) {
   const listId = React.useMemo(() => "place-suggestions-" + Math.random().toString(36).slice(2), []);
   const options = React.useMemo(() => {
@@ -104,6 +116,55 @@ function PlaceInput({ value, onChange, placeholder, suggestions = [] }) {
         {options.map(place => <option key={place} value={place}/>)}
       </datalist>
     </>
+  );
+}
+
+function FilteredPeoplePicker({ people, selectedIds = [], onToggle, maxCollapsedHeight = 72 }) {
+  const [filter, setFilter] = React.useState("");
+  const [expanded, setExpanded] = React.useState(false);
+  const norm = (s) => String(s || "").toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const q = norm(filter);
+  const selected = people.filter(p => selectedIds.includes(p.id));
+  const unselected = people.filter(p => !selectedIds.includes(p.id));
+  const filtered = q
+    ? unselected.filter(p => norm(p.first + " " + p.last).includes(q))
+    : unselected;
+  const visible = [...selected, ...(expanded ? filtered : filtered.slice(0, 8))];
+  const hasMore = !expanded && filtered.length > 8;
+
+  return (
+    <div>
+      <input
+        className="input input-sm"
+        type="text"
+        value={filter}
+        onChange={e => { setFilter(e.target.value); setExpanded(false); }}
+        placeholder="Filtrar por nome…"
+        style={{marginBottom: 8, width: "100%"}}
+      />
+      <div className="people-picker" style={{maxHeight: expanded ? 320 : maxCollapsedHeight, overflowY: "auto"}}>
+        {visible.map(p => (
+          <button
+            type="button"
+            key={p.id}
+            className={"person-chip " + (selectedIds.includes(p.id) ? "person-chip-on" : "")}
+            onClick={() => onToggle(p.id)}
+          >
+            <Avatar person={p} size={22}/>
+            <span>{p.first} {p.last}</span>
+            <span style={{color: "var(--muted-2)", fontSize: 11}}>
+              {p.birth?.year}{p.death ? "–" + p.death.year : ""}
+            </span>
+            {selectedIds.includes(p.id) && <Icon name="check" size={12}/>}
+          </button>
+        ))}
+      </div>
+      {hasMore && (
+        <button type="button" className="btn btn-sm" style={{marginTop: 6, fontSize: 11.5}} onClick={() => setExpanded(true)}>
+          Ver mais ({filtered.length - 8} restantes)
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -277,6 +338,11 @@ function EditPersonModal({ open, person, people = null, unions = null, timeline 
     unions: unions || (window.FAMILY && window.FAMILY.unions) || [],
     timeline: timeline || (window.FAMILY && window.FAMILY.timeline) || [],
   });
+  const countrySuggestions = collectCountrySuggestions({
+    people: sourcePeople,
+    unions: unions || (window.FAMILY && window.FAMILY.unions) || [],
+    timeline: timeline || (window.FAMILY && window.FAMILY.timeline) || [],
+  });
 
   async function save() {
     if (readOnly || saving) return;
@@ -390,7 +456,7 @@ function EditPersonModal({ open, person, people = null, unions = null, timeline 
               <PlaceInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Treviso" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
-              <TextInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Itália"/>
+              <PlaceInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Itália" suggestions={countrySuggestions}/>
             </Field>
 
             <div className="form-divider" data-label="Detalhes do nascimento"/>
@@ -648,6 +714,12 @@ function AddEventModal({ open, person, people = null, unions = null, timeline = 
     timeline: timeline || F.timeline || [],
     extra: [event && event.place],
   });
+  const countrySuggestions = collectCountrySuggestions({
+    people: sourcePeople,
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+    extra: [event && event.country],
+  });
   const eventDef = EVENT_TYPES.find(e => e.id === form.type);
   const editing = !!(event && event.id);
 
@@ -726,7 +798,7 @@ function AddEventModal({ open, person, people = null, unions = null, timeline = 
               <PlaceInput value={form.place} onChange={v => set("place", v)} placeholder="Caxias do Sul" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
-              <TextInput value={form.country} onChange={v => set("country", v)} placeholder="Brasil"/>
+              <PlaceInput value={form.country} onChange={v => set("country", v)} placeholder="Brasil" suggestions={countrySuggestions}/>
             </Field>
 
             {form.type === "marriage" && (
@@ -917,6 +989,11 @@ function EditUnionModal({ open, person, partner, union, people = null, unions = 
     timeline: timeline || F.timeline || [],
     extra: [union && (union.start_place || union.place)],
   });
+  const countrySuggestions = collectCountrySuggestions({
+    people: people || [person, partner].filter(Boolean),
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+  });
 
   async function save() {
     if (readOnly || saving || !union) return;
@@ -1103,6 +1180,11 @@ function AddPersonModal({ open, people = null, unions = null, timeline = null, o
     unions: unions || F.unions || [],
     timeline: timeline || F.timeline || [],
   });
+  const countrySuggestions = collectCountrySuggestions({
+    people: sourcePeople,
+    unions: unions || F.unions || [],
+    timeline: timeline || F.timeline || [],
+  });
   const isFirstPerson = sourcePeople.length === 0;
   const missingRequired = [];
   if (!String(form.first || "").trim()) missingRequired.push("primeiro nome");
@@ -1183,53 +1265,32 @@ function AddPersonModal({ open, people = null, unions = null, timeline = null, o
             <div className="form-eyebrow">Como essa pessoa se relaciona com a sua árvore?</div>
             <div className="form-grid">
               <Field label="Pais / mães" span={4} required={relationshipCount === 0} hint="selecione uma ou mais pessoas">
-                <div className="people-picker" style={{maxHeight: 240, overflowY: "auto"}}>
-                  {peopleArr.map(p => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      className={"person-chip " + ((form.parentIds || []).includes(p.id) ? "person-chip-on" : "")}
-                      onClick={() => toggleId("parentIds", p.id)}
-                    >
-                      <Avatar person={p} size={22}/>
-                      <span>{p.first} {p.last}</span>
-                      <span style={{color: "var(--muted-2)", fontSize: 11}}>
-                        {p.birth?.year}{p.death ? "–" + p.death.year : ""}
-                      </span>
-                      {(form.parentIds || []).includes(p.id) && <Icon name="check" size={12}/>}
-                    </button>
-                  ))}
-                </div>
+                <FilteredPeoplePicker
+                  people={peopleArr}
+                  selectedIds={form.parentIds || []}
+                  onToggle={id => toggleId("parentIds", id)}
+                />
               </Field>
               <Field label="Filhos(as)" span={4} hint="opcional">
-                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
-                  {peopleArr.map(p => (
-                    <button type="button" key={p.id} className={"person-chip " + ((form.childIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("childIds", p.id)}>
-                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
-                      {(form.childIds || []).includes(p.id) && <Icon name="check" size={12}/>}
-                    </button>
-                  ))}
-                </div>
+                <FilteredPeoplePicker
+                  people={peopleArr}
+                  selectedIds={form.childIds || []}
+                  onToggle={id => toggleId("childIds", id)}
+                />
               </Field>
               <Field label="Cônjuges" span={4} hint="opcional">
-                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
-                  {peopleArr.map(p => (
-                    <button type="button" key={p.id} className={"person-chip " + ((form.spouseIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("spouseIds", p.id)}>
-                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
-                      {(form.spouseIds || []).includes(p.id) && <Icon name="check" size={12}/>}
-                    </button>
-                  ))}
-                </div>
+                <FilteredPeoplePicker
+                  people={peopleArr}
+                  selectedIds={form.spouseIds || []}
+                  onToggle={id => toggleId("spouseIds", id)}
+                />
               </Field>
               <Field label="Irmãos(ãs)" span={4} hint="opcional - copia os pais conhecidos">
-                <div className="people-picker" style={{maxHeight: 180, overflowY: "auto"}}>
-                  {peopleArr.map(p => (
-                    <button type="button" key={p.id} className={"person-chip " + ((form.siblingIds || []).includes(p.id) ? "person-chip-on" : "")} onClick={() => toggleId("siblingIds", p.id)}>
-                      <Avatar person={p} size={22}/><span>{p.first} {p.last}</span>
-                      {(form.siblingIds || []).includes(p.id) && <Icon name="check" size={12}/>}
-                    </button>
-                  ))}
-                </div>
+                <FilteredPeoplePicker
+                  people={peopleArr}
+                  selectedIds={form.siblingIds || []}
+                  onToggle={id => toggleId("siblingIds", id)}
+                />
               </Field>
             </div>
             {relationshipCount > 0 && (
@@ -1261,7 +1322,7 @@ function AddPersonModal({ open, people = null, unions = null, timeline = null, o
               <PlaceInput value={form.birthPlace} onChange={v => set("birthPlace", v)} placeholder="Caxias do Sul" suggestions={placeSuggestions}/>
             </Field>
             <Field label="País" span={2}>
-              <TextInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Brasil"/>
+              <PlaceInput value={form.birthCountry} onChange={v => set("birthCountry", v)} placeholder="Brasil" suggestions={countrySuggestions}/>
             </Field>
             <div className="form-divider" data-label="Status"/>
             <Field label="Vivo(a) ou falecido(a)?" span={4}>

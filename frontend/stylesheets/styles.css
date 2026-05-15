@@ -1447,7 +1447,8 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
 /* ============ MODAL SYSTEM ============ */
 .modal-backdrop {
   position: fixed; inset: 0;
-  background: rgba(40,35,25,0.42);
+  background: rgba(40,35,25,0.55);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   display: flex; justify-content: center; align-items: flex-start;
   padding: 6vh 24px 24px;
@@ -1913,6 +1914,11 @@ h3 { font-family: var(--font-sans); font-weight: 600; font-size: 14px; letter-sp
   color: #f4f0e6;
   border-color: var(--ink);
   font-weight: 500;
+}
+.prec-chip-on:hover {
+  background: #2a2f2a;
+  color: #f4f0e6;
+  border-color: var(--ink);
 }
 .partial-date-row {
   display: grid;

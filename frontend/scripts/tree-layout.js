@@ -205,6 +205,8 @@
 
   function arrangeParentsIn(family) {
     if (!family.parents.length || family.children.length <= 1) return;
+    // Skip multi-parent families — their positioning is handled in createParentFamily
+    if (family._multiParent) return;
     family.parents.forEach(function (unit) {
       var ids = unit.nodes[0].children.map(prop("id"));
       unit.pos = Math.floor(
@@ -457,6 +459,9 @@
       var nextIdx = index + 1;
       if (nextFamily.children[nextIdx]) {
         var shift = right - getUnitX(nextFamily, nextFamily.children[nextIdx]);
+        // In multi-parent families, add extra spacing between sibling subtrees
+        // so their connector buses don't overlap horizontally.
+        if (nextFamily._multiParent && shift >= 0 && shift < 2 * SIZE) shift = 2 * SIZE;
         correctUnitsShift(nextFamily.children.slice(nextIdx), shift);
       }
     }
@@ -592,8 +597,101 @@
         });
       });
 
+      // ---------------------------------------------------------------
+      // For multi-parent families: position siblings so that each
+      // grandparent couple's bus stays on its own side (no crossing).
+      //
+      // Rule: the ancestor link (Olomir+Cintia) is on the MAIN branch.
+      //   • Paternal ancestor (left of couple / parentUnits[0]):
+      //       their siblings go to the LEFT of the ancestor link.
+      //   • Maternal ancestor (right of couple / parentUnits[1]):
+      //       their siblings go to the RIGHT of the ancestor link.
+      //
+      // Layout: [paternal siblings] [ancestor link] [maternal siblings]
+      // Then each parent unit is centred above its children group.
+      // ---------------------------------------------------------------
       family.children = childUnitsResult;
-      setDefaultUnitShift(family);
+
+      if (parentUnits.length > 1) {
+        // Build lookup: childId → owning parent unit index
+        var childOwner = {};
+        parentUnits.forEach(function (pUnit, pIdx) {
+          pUnit.nodes.forEach(function (pn) {
+            pn.children.forEach(function (rel) { childOwner[rel.id] = pIdx; });
+          });
+        });
+
+        // Separate siblings into paternal (unit 0) and maternal (unit 1+)
+        var ancestorUnit = family.children[0]; // always the ancestor link
+        var paternalSiblings = [];
+        var maternalSiblings = [];
+
+        for (var ci = 1; ci < family.children.length; ci++) {
+          var cUnit = family.children[ci];
+          var owner = -1;
+          for (var si = 0; si < cUnit.nodes.length; si++) {
+            if (childOwner[cUnit.nodes[si].id] !== undefined) {
+              owner = childOwner[cUnit.nodes[si].id];
+              break;
+            }
+          }
+          if (owner === 0) paternalSiblings.push(cUnit);
+          else maternalSiblings.push(cUnit);
+        }
+
+        // Position children: [paternal siblings] [ancestor link] [maternal siblings]
+        var pos = 0;
+        paternalSiblings.forEach(function (u) { u.pos = pos; pos += nodeCount(u) * SIZE; });
+        ancestorUnit.pos = pos; pos += nodeCount(ancestorUnit) * SIZE;
+        maternalSiblings.forEach(function (u) { u.pos = pos; pos += nodeCount(u) * SIZE; });
+
+        // Position each parent unit centred above its own children
+        parentUnits.forEach(function (pUnit) {
+          var pChildIds = {};
+          pUnit.nodes.forEach(function (pn) {
+            pn.children.forEach(function (rel) { pChildIds[rel.id] = true; });
+          });
+
+          var positions = [];
+          family.children.forEach(function (cUnit) {
+            cUnit.nodes.forEach(function (n, nIdx) {
+              if (pChildIds[n.id]) positions.push(cUnit.pos + nIdx * SIZE);
+            });
+          });
+
+          if (positions.length > 0) {
+            positions.sort(inAscOrder);
+            var mid = (positions[0] + positions[positions.length - 1]) / 2;
+            var parentWidth = nodeCount(pUnit) * SIZE;
+            pUnit.pos = Math.round(mid - parentWidth / 2 + HALF_SIZE);
+          }
+        });
+
+        // Ensure parent units don't overlap
+        family.parents.sort(function (a, b) { return a.pos - b.pos; });
+        for (var pi = 1; pi < family.parents.length; pi++) {
+          var minPos = family.parents[pi - 1].pos + nodeCount(family.parents[pi - 1]) * SIZE;
+          if (family.parents[pi].pos < minPos) {
+            family.parents[pi].pos = minPos;
+          }
+        }
+
+        // Normalize: no negative positions
+        var allUnits = family.parents.concat(family.children);
+        var minStart = arrMin(allUnits.map(prop("pos")));
+        if (minStart !== 0) {
+          correctUnitsShift(family.parents, -minStart);
+          correctUnitsShift(family.children, -minStart);
+        }
+
+        // Reorder children array to match spatial order (by pos).
+        // This ensures arrangeNextFamily's slice(nextIdx) targets correct side.
+        family.children = paternalSiblings.concat([ancestorUnit]).concat(maternalSiblings);
+        family._multiParent = true;
+      } else {
+        setDefaultUnitShift(family);
+      }
+
       return family;
     }
 
@@ -630,7 +728,15 @@
       while (family.cid) {
         right = Math.max(right, rightOf(family));
         var nextFamily = store.getFamily(family.cid);
-        var unit = family.children[0];
+
+        // Find the ancestor link unit (may not be at index 0 in multi-parent families)
+        var unit = null;
+        var unitIdx = 0;
+        for (var k = 0; k < family.children.length; k++) {
+          if (family.children[k]._isAncestorLink) { unit = family.children[k]; unitIdx = k; break; }
+        }
+        if (!unit) { unit = family.children[0]; unitIdx = 0; }
+
         var oldPos = unit.pos;
 
         if (!nextFamily.cid) {
@@ -646,8 +752,8 @@
         // Keep sibling units aligned when ancestor link unit shifts
         var delta = unit.pos - oldPos;
         if (delta !== 0 && family.children.length > 1) {
-          for (var ci = 1; ci < family.children.length; ci++) {
-            family.children[ci].pos += delta;
+          for (var ci = 0; ci < family.children.length; ci++) {
+            if (ci !== unitIdx) family.children[ci].pos += delta;
           }
         }
 
@@ -691,7 +797,13 @@
         if (families[i].cid === rootFamily.id) { parentFam = families[i]; break; }
       }
       if (parentFam && parentFam.children[0] && rootFamily.parents[0]) {
-        var shift = getUnitX(parentFam, parentFam.children[0]) - getUnitX(rootFamily, rootFamily.parents[0]);
+        // Find the ancestor link unit (connects parent family to root family)
+        var anchorUnit = null;
+        for (var ai = 0; ai < parentFam.children.length; ai++) {
+          if (parentFam.children[ai]._isAncestorLink) { anchorUnit = parentFam.children[ai]; break; }
+        }
+        if (!anchorUnit) anchorUnit = parentFam.children[0];
+        var shift = getUnitX(parentFam, anchorUnit) - getUnitX(rootFamily, rootFamily.parents[0]);
         families.filter(withFamilyType(FAMILY_TYPE_CHILD, FAMILY_TYPE_ROOT)).forEach(function (f) {
           f.X += shift;
         });

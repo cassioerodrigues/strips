@@ -16,7 +16,7 @@
   //     bio, tags, photo_media_id, ..., created_at, updated_at }
   //
   // Frontend (FAMILY-like) — campos que os componentes leem:
-  //   { id, first, last, maiden, displayName, sex, isLiving,
+  //   { id, first, middle, last, maiden, displayName, sex, isLiving,
   //     birth: { year, place }, death: { year, place, cause } | null,
   //     occupation, bio, tags, photoMediaId }
   function adaptPerson(p) {
@@ -52,6 +52,8 @@
     return {
       id: p.id,
       first: first,
+      middle: p.middle_names || "",
+      middleNames: p.middle_names || "",
       last: last,
       maiden: p.maiden_name || "",
       maidenName: p.maiden_name || "",

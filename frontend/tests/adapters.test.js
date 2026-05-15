@@ -19,6 +19,7 @@ function plain(value) {
 const person = context.window.adapters.adaptPerson({
   id: "person-1",
   first_name: "Maria",
+  middle_names: "das Dores",
   last_name: "Silva",
   maiden_name: "Costa",
   sex: "F",
@@ -40,6 +41,8 @@ const person = context.window.adapters.adaptPerson({
 
 assert.equal(person.maiden, "Costa");
 assert.equal(person.maidenName, "Costa");
+assert.equal(person.middle, "das Dores");
+assert.equal(person.middleNames, "das Dores");
 assert.equal(person.generation, 3);
 assert.equal(person.createdAt, "2026-05-10T12:00:00Z");
 assert.equal(person.updatedAt, "2026-05-12T12:00:00Z");

@@ -274,6 +274,37 @@
     });
   }
 
+  function centerParentUnitsOverChildren(family) {
+    family.parents.forEach(function (pUnit) {
+      var pChildIds = {};
+      pUnit.nodes.forEach(function (pn) {
+        pn.children.forEach(function (rel) { pChildIds[rel.id] = true; });
+      });
+
+      var positions = [];
+      family.children.forEach(function (cUnit) {
+        cUnit.nodes.forEach(function (n, nIdx) {
+          if (pChildIds[n.id]) positions.push(cUnit.pos + nIdx * SIZE);
+        });
+      });
+
+      if (positions.length > 0) {
+        positions.sort(inAscOrder);
+        var mid = (positions[0] + positions[positions.length - 1]) / 2;
+        var parentWidth = nodeCount(pUnit) * SIZE;
+        pUnit.pos = Math.round(mid - parentWidth / 2 + HALF_SIZE);
+      }
+    });
+
+    family.parents.sort(function (a, b) { return a.pos - b.pos; });
+    for (var pi = 1; pi < family.parents.length; pi++) {
+      var minPos = family.parents[pi - 1].pos + nodeCount(family.parents[pi - 1]) * SIZE;
+      if (family.parents[pi].pos < minPos) {
+        family.parents[pi].pos = minPos;
+      }
+    }
+  }
+
   // =========================================================================
   // STORE (Armazena o estado da árvore)
   // Contém todos os nós (pessoas) e famílias criadas durante o cálculo.
@@ -824,35 +855,7 @@
         maternalSiblings.forEach(function (u) { u.pos = pos; pos += nodeCount(u) * SIZE; });
 
         // Posiciona cada unidade de pais centralizada acima dos seus filhos
-        parentUnits.forEach(function (pUnit) {
-          var pChildIds = {};
-          pUnit.nodes.forEach(function (pn) {
-            pn.children.forEach(function (rel) { pChildIds[rel.id] = true; });
-          });
-
-          var positions = [];
-          family.children.forEach(function (cUnit) {
-            cUnit.nodes.forEach(function (n, nIdx) {
-              if (pChildIds[n.id]) positions.push(cUnit.pos + nIdx * SIZE);
-            });
-          });
-
-          if (positions.length > 0) {
-            positions.sort(inAscOrder);
-            var mid = (positions[0] + positions[positions.length - 1]) / 2;
-            var parentWidth = nodeCount(pUnit) * SIZE;
-            pUnit.pos = Math.round(mid - parentWidth / 2 + HALF_SIZE);
-          }
-        });
-
-        // Garante que unidades de pais não se sobreponham
-        family.parents.sort(function (a, b) { return a.pos - b.pos; });
-        for (var pi = 1; pi < family.parents.length; pi++) {
-          var minPos = family.parents[pi - 1].pos + nodeCount(family.parents[pi - 1]) * SIZE;
-          if (family.parents[pi].pos < minPos) {
-            family.parents[pi].pos = minPos;
-          }
-        }
+        centerParentUnitsOverChildren(family);
 
         // Normaliza: sem posições negativas
         var allUnits = family.parents.concat(family.children);
@@ -1002,6 +1005,7 @@
           });
         }
 
+        centerParentUnitsOverChildren(parentFam);
       }
     }
 

@@ -1,5 +1,6 @@
 from app.routers import (
     auth,
+    dashboard_activity,
     events,
     external_records,
     media,
@@ -14,6 +15,7 @@ from app.routers import (
 
 __all__ = [
     "auth",
+    "dashboard_activity",
     "events",
     "external_records",
     "media",

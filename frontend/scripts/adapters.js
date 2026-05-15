@@ -81,6 +81,8 @@
       photoMediaId: p.photo_media_id || null,
       externalIds: p.external_ids || {},
       generation: Number.isFinite(generation) ? generation : null,
+      createdAt: p.created_at || null,
+      updatedAt: p.updated_at || null,
     };
   }
 
@@ -204,6 +206,32 @@
     };
   }
 
+  function adaptDashboardActivity(item) {
+    if (!item) return null;
+    return {
+      id: item.id,
+      kind: item.kind || "person_updated",
+      personId: item.person_id || null,
+      title: item.title || "",
+      subtitle: item.subtitle || "",
+      actorName: item.actor_name || null,
+      occurredAt: item.occurred_at || null,
+    };
+  }
+
+  function adaptExternalRecordSuggestion(item) {
+    if (!item) return null;
+    return {
+      id: item.id,
+      source: item.source || "",
+      title: item.title || "Sugestão encontrada",
+      subtitle: item.subtitle || "",
+      confidence: item.confidence == null ? null : item.confidence,
+      personId: item.person_id || null,
+      sourceUrl: item.source_url || null,
+    };
+  }
+
   window.adapters = {
     adaptPerson: adaptPerson,
     adaptRelations: adaptRelations,
@@ -211,5 +239,7 @@
     adaptTimelineItem: adaptTimelineItem,
     adaptEvent: adaptEvent,
     adaptMedia: adaptMedia,
+    adaptDashboardActivity: adaptDashboardActivity,
+    adaptExternalRecordSuggestion: adaptExternalRecordSuggestion,
   };
 })();

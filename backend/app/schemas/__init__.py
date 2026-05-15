@@ -5,6 +5,7 @@ app/schemas/__init__.py — reexporta todos os schemas Pydantic do Stirps.
 """
 
 from app.schemas.auth import MeResponse, ProfileOut, TreeMembershipOut
+from app.schemas.dashboard_activity import DashboardActivityItem, DashboardActivityKind
 from app.schemas.event import EventCreate, EventOut, EventType, EventUpdate
 from app.schemas.media import (
     MediaCreate,
@@ -29,6 +30,9 @@ __all__ = [
     "MeResponse",
     "ProfileOut",
     "TreeMembershipOut",
+    # dashboard activity
+    "DashboardActivityItem",
+    "DashboardActivityKind",
     # tree
     "TreeCreate",
     "TreeUpdate",

@@ -34,11 +34,15 @@ const person = context.window.adapters.adaptPerson({
   death_cause: "natural",
   tags: ["familia"],
   external_ids: { generation: "3", birth_note: "Registro civil", birth_source: "Cartorio A" },
+  created_at: "2026-05-10T12:00:00Z",
+  updated_at: "2026-05-12T12:00:00Z",
 });
 
 assert.equal(person.maiden, "Costa");
 assert.equal(person.maidenName, "Costa");
 assert.equal(person.generation, 3);
+assert.equal(person.createdAt, "2026-05-10T12:00:00Z");
+assert.equal(person.updatedAt, "2026-05-12T12:00:00Z");
 assert.deepEqual(plain(person.externalIds), { generation: "3", birth_note: "Registro civil", birth_source: "Cartorio A" });
 assert.deepEqual(plain(person.birth), {
   year: 1941,
@@ -82,4 +86,40 @@ assert.deepEqual(plain(context.window.adapters.adaptMedia({
   uploadedBy: "user-1",
   uploadedAt: null,
   downloadUrl: null,
+});
+
+assert.deepEqual(plain(context.window.adapters.adaptDashboardActivity({
+  id: "activity-1",
+  kind: "person_created",
+  person_id: "person-1",
+  title: "Ana Souza foi adicionada",
+  subtitle: "Perfil criado",
+  actor_name: "Helena",
+  occurred_at: "2026-05-14T10:00:00Z",
+})), {
+  id: "activity-1",
+  kind: "person_created",
+  personId: "person-1",
+  title: "Ana Souza foi adicionada",
+  subtitle: "Perfil criado",
+  actorName: "Helena",
+  occurredAt: "2026-05-14T10:00:00Z",
+});
+
+assert.deepEqual(plain(context.window.adapters.adaptExternalRecordSuggestion({
+  id: "suggestion-1",
+  source: "familysearch",
+  title: "Registro de batismo",
+  subtitle: "Olinda, 1884",
+  confidence: 88,
+  person_id: "person-1",
+  source_url: "https://example.test/record",
+})), {
+  id: "suggestion-1",
+  source: "familysearch",
+  title: "Registro de batismo",
+  subtitle: "Olinda, 1884",
+  confidence: 88,
+  personId: "person-1",
+  sourceUrl: "https://example.test/record",
 });

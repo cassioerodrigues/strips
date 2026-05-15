@@ -14,7 +14,7 @@
 // Status possíveis em window.useTree():
 //   - "idle"         pré-bootstrap (auth ainda carregando)
 //   - "loading"      requisições em andamento
-//   - "ready"        dados carregados (people/stats/timeline)
+//   - "ready"        dados carregados (people/stats/timeline/activity/suggestions)
 //   - "empty"        usuário autenticado mas sem trees (auth.trees vazio)
 //   - "unavailable"  apiBaseUrl vazio OU sem supabaseClient OU misconfigured
 //   - "error"        falha em uma ou mais chamadas (dados parciais podem
@@ -38,6 +38,8 @@
     relationsByChild: {},
     stats: null,
     timeline: [],
+    activity: [],
+    suggestions: [],
     error: null,
   };
 
@@ -91,7 +93,7 @@
   // ---------------------------------------------------------------------
   // Deduplica por (treeId, accessToken). Sem isso, cada onAuthStateChange
   // (SIGNED_IN + INITIAL_SESSION + TOKEN_REFRESHED) dispararia uma nova
-  // bateria de 4 requests.
+  // bateria de requests do dashboard/árvore.
   let loadKey = null;
   let loadInFlight = false;
 
@@ -152,11 +154,13 @@
     const api = window.api;
 
     // Roda em paralelo — falha de um endpoint não derruba os outros.
-    const [peopleRes, unionsRes, statsRes, timelineRes] = await Promise.allSettled([
+    const [peopleRes, unionsRes, statsRes, timelineRes, activityRes, suggestionsRes] = await Promise.allSettled([
       api.fetch("/trees/" + treeId + "/people"),
       api.fetch("/trees/" + treeId + "/unions"),
       api.fetch("/trees/" + treeId + "/stats"),
       api.fetch("/trees/" + treeId + "/timeline"),
+      api.fetch("/trees/" + treeId + "/dashboard-activity?limit=6"),
+      api.fetch("/trees/" + treeId + "/external-records?status=suggested&limit=3"),
     ]);
 
     const errors = [];
@@ -214,6 +218,22 @@
       errors.push("timeline: " + (timelineRes.reason && timelineRes.reason.message));
     }
 
+    let activity = [];
+    if (activityRes.status === "fulfilled") {
+      const list = Array.isArray(activityRes.value) ? activityRes.value : [];
+      activity = list.map(adapt.adaptDashboardActivity || function (x) { return x; }).filter(Boolean);
+    } else {
+      errors.push("atividade: " + (activityRes.reason && activityRes.reason.message));
+    }
+
+    let suggestions = [];
+    if (suggestionsRes.status === "fulfilled") {
+      const list = Array.isArray(suggestionsRes.value) ? suggestionsRes.value : [];
+      suggestions = list.map(adapt.adaptExternalRecordSuggestion || function (x) { return x; }).filter(Boolean);
+    } else {
+      errors.push("sugestões: " + (suggestionsRes.reason && suggestionsRes.reason.message));
+    }
+
     loadInFlight = false;
     if (errors.length > 0) {
       setState({
@@ -224,6 +244,8 @@
         relationsByChild: relationsByChild,
         stats: stats,
         timeline: timeline,
+        activity: activity,
+        suggestions: suggestions,
         error: errors.join(" · "),
       });
     } else {
@@ -235,6 +257,8 @@
         relationsByChild: relationsByChild,
         stats: stats,
         timeline: timeline,
+        activity: activity,
+        suggestions: suggestions,
         error: null,
       });
     }
@@ -256,7 +280,23 @@
   function reactToAuth(auth) {
     if (!hasApi()) {
       // Sem config / SDK / api → componentes caem no FAMILY mock.
-      setState({ status: "unavailable", error: null });
+      setState({
+        status: "unavailable",
+        treeId: null,
+        tree: null,
+        role: null,
+        canEdit: false,
+        myPersonId: null,
+        people: [],
+        peopleById: {},
+        unions: [],
+        relationsByChild: {},
+        stats: null,
+        timeline: [],
+        activity: [],
+        suggestions: [],
+        error: null,
+      });
       loadKey = null;
       return;
     }
@@ -274,12 +314,15 @@
         tree: null,
         role: null,
         canEdit: false,
+        myPersonId: null,
         people: [],
         peopleById: {},
         unions: [],
         relationsByChild: {},
         stats: null,
         timeline: [],
+        activity: [],
+        suggestions: [],
         error: null,
       });
       loadKey = null;
@@ -300,6 +343,8 @@
         relationsByChild: {},
         stats: null,
         timeline: [],
+        activity: [],
+        suggestions: [],
         error: null,
       });
       loadKey = null;

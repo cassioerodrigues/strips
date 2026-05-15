@@ -6,6 +6,7 @@ from app.db import lifespan
 from app.errors import register_exception_handlers
 from app.routers import (
     auth,
+    dashboard_activity,
     events,
     external_records,
     media,
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(auth.router)
+    app.include_router(dashboard_activity.router)
     app.include_router(trees.router)
     app.include_router(members.router)
     app.include_router(people.router)

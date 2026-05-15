@@ -115,6 +115,7 @@ assert.deepEqual(plain(context.window.adapters.adaptEvent({
   title: "Mudança",
   place: "Sao Paulo",
   description: "",
+  sortDate: 19991231,
 });
 
 assert.deepEqual(plain(context.window.adapters.adaptDashboardActivity({

@@ -502,7 +502,7 @@ function Profile({ personId, onBack, onPersonClick, onViewInTree }) {
               <div className="ptl">
                 {events.map((e, i) => (
                   <div key={i} className="ptl-row">
-                    <div className="ptl-year">{e.year}</div>
+                    <div className="ptl-year">{i === 0 || events[i - 1].year !== e.year ? e.year : ""}</div>
                     <div className="ptl-line">
                       <div className="ptl-dot" style={{background: e.color}}/>
                     </div>
@@ -909,7 +909,7 @@ function buildPersonEvents(p, F) {
     if ((c.parents||[]).includes(p.id) && c.birth?.year) {
       events.push({
         year: c.birth.year,
-        title: `Nascimento de ${c.first}`,
+        title: `Nascimento de ${fullPersonName(c, "pessoa desconhecida")}`,
         place: c.birth.place,
         color: "#a08658",
         note: c.birth.note || `${c.first} ${c.last}`.trim(),
@@ -918,8 +918,7 @@ function buildPersonEvents(p, F) {
     }
   });
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
-  events.sort((a,b) => a.year - b.year);
-  return events;
+  return sortAndFilterTimelineEvents(events);
 }
 
 // Eventos da API entram junto com nascimento + uniões + filhos + morte derivados.
@@ -964,7 +963,7 @@ function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments, unions
     if (c.birth?.year) {
       events.push({
         year: c.birth.year,
-        title: `Nascimento de ${c.first}`,
+        title: `Nascimento de ${fullPersonName(c, "pessoa desconhecida")}`,
         place: c.birth.place,
         color: "#a08658",
         note: c.birth.note,
@@ -973,8 +972,24 @@ function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments, unions
     }
   });
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
-  events.sort((a,b) => (a.year||0) - (b.year||0));
-  return events;
+  return sortAndFilterTimelineEvents(events);
+}
+
+function sortAndFilterTimelineEvents(events) {
+  const sortTimelineDate = (window.adapters && window.adapters.timelineSortDate) || timelineSortDate;
+  return (events || [])
+    .filter(event => event && event.year != null)
+    .sort((a, b) => sortTimelineDate(a) - sortTimelineDate(b));
+}
+
+function timelineSortDate(item) {
+  if (!item || item.year == null) return Number.POSITIVE_INFINITY;
+  const year = Number(item.year);
+  const hasFullDate = item.month != null && item.day != null;
+  const month = hasFullDate ? Number(item.month) : 12;
+  const day = hasFullDate ? Number(item.day) : 31;
+  if (!Number.isFinite(year)) return Number.POSITIVE_INFINITY;
+  return year * 10000 + (Number.isFinite(month) ? month : 12) * 100 + (Number.isFinite(day) ? day : 31);
 }
 
 function unionHasPerson(union, personId) {

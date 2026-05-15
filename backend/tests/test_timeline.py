@@ -144,8 +144,7 @@ async def test_timeline_title_is_localized_pt(client, seeded_tree):
     items = resp.json()
     titles = [it["title"] for it in items]
 
-    # Spec example: "Imigração de Giuseppe Bertolini"
-    assert any("Imigração de Carlos Bertolini" == t for t in titles), titles
+    assert any("Imigração - Carlos Bertolini" == t for t in titles), titles
     assert any("Nascimento de Carlos Bertolini" == t for t in titles), titles
     assert any("Falecimento de Carlos Bertolini" == t for t in titles), titles
     assert any("Casamento de" in t and "Carlos Bertolini" in t and "Maria Silva" in t
@@ -213,8 +212,8 @@ async def test_timeline_nonexistent_tree_returns_404(client, seeded_tree):
 
 
 @pytest.mark.anyio
-async def test_timeline_includes_null_year_events_at_bottom(client, seeded_tree):
-    """Eventos sem ano aparecem ao final (NULLS LAST) — quando sem filtros."""
+async def test_timeline_excludes_null_year_events(client, seeded_tree):
+    """Eventos sem ano não entram na linha do tempo."""
     token = seeded_tree["token_a"]
     tree_id = seeded_tree["tree_a"]
     person_id = seeded_tree["person_a"]
@@ -243,7 +242,5 @@ async def test_timeline_includes_null_year_events_at_bottom(client, seeded_tree)
 
     assert resp.status_code == 200, resp.text
     items = resp.json()
-    assert len(items) == 2
-    # Primeiro o que tem ano; depois o NULL.
+    assert len(items) == 1
     assert items[0]["year"] == 1990
-    assert items[1]["year"] is None

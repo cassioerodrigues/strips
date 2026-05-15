@@ -1,7 +1,8 @@
 """timeline.py — serviço de agregação cronológica (Issue #15).
 
 Une `events`, `persons` (birth/death) e `unions` em uma lista única
-ordenada por (year, month, day) ASC NULLS LAST. RLS filtra todas as
+ordenada por data completa; datas parciais entram como 31/12 do ano.
+Itens sem ano ficam fora da timeline. RLS filtra todas as
 subqueries automaticamente — a conexão já entra com SET LOCAL ROLE
 authenticated via `deps.get_db_authenticated`.
 
@@ -95,6 +96,13 @@ def _display_name_or_fallback(name: str | None) -> str:
     return name or "pessoa desconhecida"
 
 
+def _person_name_sql(alias: str) -> str:
+    return (
+        f"COALESCE(NULLIF({alias}.display_name, ''), "
+        f"NULLIF(CONCAT_WS(' ', {alias}.first_name, {alias}.middle_names, {alias}.last_name), ''))"
+    )
+
+
 def _compose_title(row: dict[str, Any]) -> str:
     """Compõe o `title` em PT-BR a partir dos campos crus retornados pelo SQL.
 
@@ -126,7 +134,7 @@ def _compose_title(row: dict[str, Any]) -> str:
         base = EVENT_TYPE_LABELS.get(event_type, "Evento")
 
     if person_name:
-        return f"{base} de {_display_name_or_fallback(person_name)}"
+        return f"{base} - {_display_name_or_fallback(person_name)}"
     return base
 
 
@@ -139,7 +147,7 @@ def _compose_title(row: dict[str, Any]) -> str:
 # em (tree_id) ao invés de filtrar depois do UNION (Postgres não consegue
 # empurrar predicados para dentro do UNION ALL nesse caso por causa do
 # CASE-like join com persons).
-_TIMELINE_SQL = """
+_TIMELINE_SQL = f"""
 WITH timeline AS (
     -- Events
     SELECT
@@ -150,7 +158,7 @@ WITH timeline AS (
         e.description,
         e.type::text AS event_type,
         e.custom_label,
-        p.display_name AS person_display_name,
+        {_person_name_sql("p")} AS person_display_name,
         NULL::text AS partner_a_display_name,
         NULL::text AS partner_b_display_name,
         NULL::text AS union_type
@@ -170,7 +178,7 @@ WITH timeline AS (
         NULL::text AS description,
         NULL::text AS event_type,
         NULL::text AS custom_label,
-        p.display_name AS person_display_name,
+        {_person_name_sql("p")} AS person_display_name,
         NULL::text AS partner_a_display_name,
         NULL::text AS partner_b_display_name,
         NULL::text AS union_type
@@ -190,7 +198,7 @@ WITH timeline AS (
         p.death_cause AS description,
         NULL::text AS event_type,
         NULL::text AS custom_label,
-        p.display_name AS person_display_name,
+        {_person_name_sql("p")} AS person_display_name,
         NULL::text AS partner_a_display_name,
         NULL::text AS partner_b_display_name,
         NULL::text AS union_type
@@ -212,8 +220,8 @@ WITH timeline AS (
         NULL::text AS event_type,
         NULL::text AS custom_label,
         NULL::text AS person_display_name,
-        pa.display_name AS partner_a_display_name,
-        pb.display_name AS partner_b_display_name,
+        {_person_name_sql("pa")} AS partner_a_display_name,
+        {_person_name_sql("pb")} AS partner_b_display_name,
         u.type::text AS union_type
     FROM unions u
     LEFT JOIN persons pa ON pa.id = u.partner_a_id
@@ -223,12 +231,13 @@ WITH timeline AS (
 SELECT *
 FROM timeline
 WHERE TRUE
-  {kind_filter}
-  {from_year_filter}
-  {to_year_filter}
-ORDER BY year ASC NULLS LAST,
-         month ASC NULLS LAST,
-         day ASC NULLS LAST
+  AND year IS NOT NULL
+  {{kind_filter}}
+  {{from_year_filter}}
+  {{to_year_filter}}
+ORDER BY year ASC,
+         CASE WHEN month IS NULL OR day IS NULL THEN 12 ELSE month END ASC,
+         CASE WHEN month IS NULL OR day IS NULL THEN 31 ELSE day END ASC
 """
 
 
@@ -252,7 +261,8 @@ def get_timeline(
         (semântica natural de comparação SQL com NULL → unknown).
       - kinds: lista de TimelineKind; None = sem filtro.
 
-    Ordenação: (year, month, day) ASC NULLS LAST.
+    Ordenação: data completa; quando mês/dia faltam, o item é tratado como
+    31/12 daquele ano. Itens sem ano são excluídos.
 
     404 quando a árvore não é visível ao usuário (RLS filtra o probe).
     """

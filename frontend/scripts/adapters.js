@@ -162,7 +162,18 @@
       personId: item.person_id || null,
       unionId: item.union_id || null,
       description: item.description || "",
+      sortDate: timelineSortDate(item),
     };
+  }
+
+  function timelineSortDate(item) {
+    if (!item || item.year == null) return Number.POSITIVE_INFINITY;
+    const year = Number(item.year);
+    const hasFullDate = item.month != null && item.day != null;
+    const month = hasFullDate ? Number(item.month) : 12;
+    const day = hasFullDate ? Number(item.day) : 31;
+    if (!Number.isFinite(year)) return Number.POSITIVE_INFINITY;
+    return year * 10000 + (Number.isFinite(month) ? month : 12) * 100 + (Number.isFinite(day) ? day : 31);
   }
 
   function adaptEvent(item) {
@@ -187,6 +198,7 @@
       title: labelMap[item.type] || item.custom_label || item.type || "Evento",
       place: item.place || "",
       description: item.description || "",
+      sortDate: timelineSortDate(item),
     };
   }
 
@@ -242,6 +254,7 @@
     adaptRelations: adaptRelations,
     adaptStats: adaptStats,
     adaptTimelineItem: adaptTimelineItem,
+    timelineSortDate: timelineSortDate,
     adaptEvent: adaptEvent,
     adaptMedia: adaptMedia,
     adaptDashboardActivity: adaptDashboardActivity,

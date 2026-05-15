@@ -367,7 +367,14 @@ function TimelinePage() {
 
   const apiTimeline = tree.status === "ready" ? tree.timeline : null;
   const sourceTimeline = apiTimeline || F.timeline;
-  const events = [...sourceTimeline].sort((a, b) => (a.year || 0) - (b.year || 0));
+  const sortTimelineDate = (window.adapters && window.adapters.timelineSortDate) || function (item) {
+    if (!item || item.year == null) return Number.POSITIVE_INFINITY;
+    const hasFullDate = item.month != null && item.day != null;
+    return Number(item.year) * 10000 + Number(hasFullDate ? item.month : 12) * 100 + Number(hasFullDate ? item.day : 31);
+  };
+  const events = [...sourceTimeline]
+    .filter(item => item && item.year != null)
+    .sort((a, b) => sortTimelineDate(a) - sortTimelineDate(b));
 
   const isLoading = tree.status === "loading" || tree.status === "idle";
   const isError = tree.status === "error" && (!apiTimeline || apiTimeline.length === 0);
@@ -402,7 +409,7 @@ function TimelinePage() {
         <div className="big-timeline">
           {events.map((e, i) => (
             <div key={i} className="big-tl-row">
-              <div className="big-tl-year">{e.year}</div>
+              <div className="big-tl-year">{i === 0 || events[i - 1].year !== e.year ? e.year : ""}</div>
               <div className="big-tl-line"><div className="big-tl-dot"/></div>
               <Card padding={20} className="big-tl-card">
                 <div className="big-tl-title">{e.label}</div>

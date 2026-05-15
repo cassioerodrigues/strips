@@ -927,7 +927,7 @@ function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments, unions
     year: e.year,
     month: e.month,
     day: e.day,
-    title: e.title,
+    title: personEventTimelineTitle(e, p, peopleById),
     place: e.place,
     color: "#3a5b6b",
     note: e.description,
@@ -1005,6 +1005,54 @@ function unionTypeLabel(type) {
     other: "União",
   };
   return labels[type] || "Casamento";
+}
+
+function personEventTimelineTitle(event, currentPerson, peopleById) {
+  const base = eventTypeLabel(event);
+  const isRelatedEvent = event && currentPerson && event.personId && event.personId !== currentPerson.id;
+  if (!isRelatedEvent) return base;
+  const primaryPerson = peopleById && peopleById[event.personId];
+  return `${base} - ${personFullName(primaryPerson)}`;
+}
+
+function eventTypeLabel(event) {
+  if (!event) return "Evento";
+  if (event.customLabel) return event.customLabel;
+  const labels = {
+    baptism: "Batismo",
+    christening: "Batismo cristão",
+    confirmation: "Crisma",
+    first_communion: "Primeira comunhão",
+    bar_mitzvah: "Bar Mitzvá",
+    bat_mitzvah: "Bat Mitzvá",
+    ordination: "Ordenação",
+    blessing: "Benção",
+    adoption: "Adoção",
+    engagement: "Noivado",
+    graduation: "Formatura",
+    retirement: "Aposentadoria",
+    occupation: "Carreira",
+    education: "Formação",
+    military: "Serviço militar",
+    residence: "Mudança",
+    immigration: "Imigração",
+    emigration: "Emigração",
+    naturalization: "Naturalização",
+    census: "Censo",
+    will: "Testamento",
+    probate: "Inventário",
+    obituary: "Obituário",
+    burial: "Sepultamento",
+    cremation: "Cremação",
+    religion: "Religião",
+    custom: "Evento",
+  };
+  return labels[event.type] || event.title || "Evento";
+}
+
+function personFullName(person) {
+  if (!person) return "pessoa desconhecida";
+  return person.displayName || [person.first, person.last].filter(Boolean).join(" ").trim() || "pessoa desconhecida";
 }
 
 function partnerName(person) {

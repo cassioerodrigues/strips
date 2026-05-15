@@ -140,7 +140,7 @@ function Profile({ personId, onBack, onPersonClick }) {
   );
   const birthDocuments = mediaItems.filter(isBirthMedia);
   const events = useApi
-    ? buildPersonEventsFromApi(p, children, personHook.events || [], birthDocuments)
+    ? buildPersonEventsFromApi(p, children, personHook.events || [], birthDocuments, tree.unions || [], tree.peopleById || {})
     : buildPersonEvents(p, F);
   const canEdit = useApi ? !!tree.canEdit : true;
   const readOnlyReason = tree.role === "viewer"
@@ -889,11 +889,18 @@ function buildPersonEvents(p, F) {
       source: p.birth.source,
     });
   }
-  const union = F.unions.find(u => u.partners.includes(p.id));
-  if (union) {
-    const partner = F.people[union.partners.find(x => x !== p.id)];
-    events.push({ year: union.year, title: `Casamento com ${partner?.first || "—"}`, place: union.place, color: "#3a5b6b" });
-  }
+  (F.unions || []).filter(u => unionHasPerson(u, p.id)).forEach(union => {
+    const partner = F.people[getUnionPartnerId(union, p.id)];
+    events.push({
+      year: getUnionStartYear(union),
+      title: `${unionTypeLabel(union.type)} com ${partnerName(partner)}`,
+      place: getUnionStartPlace(union),
+      color: "#3a5b6b",
+      note: union.notes || "",
+      unionId: union.id || null,
+      kind: "union",
+    });
+  });
   // Children births
   Object.values(F.people).forEach(c => {
     if ((c.parents||[]).includes(p.id) && c.birth?.year) {
@@ -912,8 +919,8 @@ function buildPersonEvents(p, F) {
   return events;
 }
 
-// Eventos da API entram junto com nascimento + filhos + morte derivados.
-function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments) {
+// Eventos da API entram junto com nascimento + uniões + filhos + morte derivados.
+function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments, unions, peopleById) {
   const events = (apiEvents || []).map(e => ({
     id: e.id,
     type: e.type,
@@ -925,6 +932,20 @@ function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments) {
     color: "#3a5b6b",
     note: e.description,
   }));
+  (unions || []).filter(u => unionHasPerson(u, p.id)).forEach(union => {
+    const partner = peopleById && peopleById[getUnionPartnerId(union, p.id)];
+    events.push({
+      year: getUnionStartYear(union),
+      month: union.start_month || null,
+      day: union.start_day || null,
+      title: `${unionTypeLabel(union.type)} com ${partnerName(partner)}`,
+      place: getUnionStartPlace(union),
+      color: "#3a5b6b",
+      note: union.notes || "",
+      unionId: union.id || null,
+      kind: "union",
+    });
+  });
   if (p.birth?.year) {
     events.push({
       year: p.birth.year,
@@ -951,6 +972,44 @@ function buildPersonEventsFromApi(p, children, apiEvents, birthDocuments) {
   if (p.death?.year) events.push({ year: p.death.year, title: "Falecimento", place: p.death.place, color: "#7a6b52" });
   events.sort((a,b) => (a.year||0) - (b.year||0));
   return events;
+}
+
+function unionHasPerson(union, personId) {
+  if (!union || !personId) return false;
+  if (Array.isArray(union.partners)) return union.partners.includes(personId);
+  return union.partner_a_id === personId || union.partner_b_id === personId;
+}
+
+function getUnionPartnerId(union, personId) {
+  if (!union) return null;
+  if (Array.isArray(union.partners)) return union.partners.find(id => id !== personId) || null;
+  if (union.partner_a_id === personId) return union.partner_b_id || null;
+  if (union.partner_b_id === personId) return union.partner_a_id || null;
+  return null;
+}
+
+function getUnionStartYear(union) {
+  return union ? (union.start_year || union.year || null) : null;
+}
+
+function getUnionStartPlace(union) {
+  return union ? (union.start_place || union.place || "") : "";
+}
+
+function unionTypeLabel(type) {
+  const labels = {
+    marriage: "Casamento",
+    civil_union: "União civil",
+    partnership: "União estável",
+    engagement: "Noivado",
+    other: "União",
+  };
+  return labels[type] || "Casamento";
+}
+
+function partnerName(person) {
+  if (!person) return "—";
+  return person.first || person.displayName || [person.first_name, person.last_name].filter(Boolean).join(" ") || "—";
 }
 
 window.Profile = Profile;

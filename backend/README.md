@@ -313,3 +313,116 @@ O unit do systemd roda o serviço como `www-data`. O `/srv/strips/backend/.env`
 precisa ser legível por esse usuário — hoje está com modo `644` `root:root`,
 o que basta. Se algum dia o modo mudar para `600`, troque o dono para
 `www-data:www-data` (ou mantenha `644` para legibilidade global).
+
+## Testar com dados reais (Supabase Cloud via REST API)
+
+Em ambientes corporativos com proxy/firewall, a conexão direta ao PostgreSQL
+(porta 5432) pode ser bloqueada. Nesses casos, é possível testar usando a
+**REST API do Supabase** (PostgREST), que passa por HTTPS (porta 443).
+
+### Pré-requisitos
+
+1. As variáveis `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` do `.env` raiz
+   (ou do dashboard do Supabase em **Project Settings → API**).
+2. Python 3.11+ (não precisa de venv nem de dependências extras — usa apenas
+   `urllib` e `json` da stdlib).
+
+### Credenciais
+
+```
+SUPABASE_URL       = https://<project-ref>.supabase.co
+SERVICE_ROLE_KEY   = sb_secret_...   (dashboard → Settings → API → service_role)
+```
+
+> **Segurança:** a service role key ignora RLS. Nunca exponha no frontend.
+
+### Script mínimo de consulta
+
+```python
+import json, ssl, urllib.request
+
+SUPABASE_URL = "https://<project-ref>.supabase.co"
+SERVICE_KEY  = "sb_secret_..."
+
+# Proxy corporativo pode interceptar TLS — desabilitar verificação se necessário
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def rest_get(table, params=""):
+    url = f"{SUPABASE_URL}/rest/v1/{table}?{params}"
+    req = urllib.request.Request(url, headers={
+        "apikey": SERVICE_KEY,
+        "Authorization": f"Bearer {SERVICE_KEY}",
+        "Accept": "application/json",
+    })
+    with urllib.request.urlopen(req, context=ctx) as resp:
+        return json.loads(resp.read())
+
+# Exemplo: listar pessoas de uma árvore
+TREE_ID = "dc8ac34d-..."
+persons = rest_get("persons", f"tree_id=eq.{TREE_ID}&select=id,first_name,last_name&order=first_name")
+for p in persons:
+    print(f"  {p['id']}  {p['first_name']} {p['last_name']}")
+```
+
+### Operações CRUD via REST
+
+A REST API do Supabase (PostgREST) suporta GET, POST, PATCH, DELETE:
+
+```python
+def rest_patch(table, params, body):
+    url = f"{SUPABASE_URL}/rest/v1/{table}?{params}"
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, method="PATCH", headers={
+        "apikey": SERVICE_KEY,
+        "Authorization": f"Bearer {SERVICE_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Prefer": "return=representation",
+    })
+    with urllib.request.urlopen(req, context=ctx) as resp:
+        return json.loads(resp.read())
+
+# Exemplo: setar person_id de um membro
+rest_patch(
+    "tree_members",
+    f"tree_id=eq.{TREE_ID}&user_id=eq.{USER_ID}",
+    {"person_id": "8b26ea1d-..."},
+)
+```
+
+### Aplicar migrations (DDL) sem psql
+
+Se a porta 5432 está bloqueada, use o **SQL Editor** no dashboard do Supabase:
+
+1. Acesse https://supabase.com/dashboard → seu projeto → **SQL Editor**
+2. Cole o conteúdo do arquivo de migration (ex: `db/migrations/0012_tree_members_person_id.sql`)
+3. Clique **Run**
+
+Alternativamente, use o Supabase CLI com `supabase db push` (requer
+`supabase link` — o CLI usa a Management API, não conexão direta ao Postgres).
+
+### Por que não usar psycopg direto?
+
+| Método | Porta | Funciona com proxy? |
+|--------|-------|---------------------|
+| `psycopg.connect(DSN)` | 5432 (TCP) | ❌ Bloqueada em muitas redes corporativas |
+| REST API (`/rest/v1/`) | 443 (HTTPS) | ✅ Passa pelo proxy normalmente |
+| Supabase CLI (`db push`) | HTTPS (Management API) | ✅ |
+| SQL Editor (dashboard) | 443 (HTTPS) | ✅ |
+
+### Dica: NODE_TLS_REJECT_UNAUTHORIZED
+
+Se o proxy corporativo intercepta certificados TLS (MITM), chamadas HTTPS
+ao Supabase podem falhar com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Para os
+testes do frontend (Node.js):
+
+```bash
+set NODE_TLS_REJECT_UNAUTHORIZED=0   # PowerShell / Windows
+export NODE_TLS_REJECT_UNAUTHORIZED=0 # bash / Linux
+node tests/tree-layout.test.js
+```
+
+Para Python, o equivalente é o `ssl` context com `verify_mode = ssl.CERT_NONE`
+mostrado acima.
